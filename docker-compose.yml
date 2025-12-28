@@ -1,10 +1,9 @@
-version: '3.8'
-
 services:
   slashvibeissue:
     build:
       context: .
       dockerfile: Dockerfile
+    read_only: true
     image: slashvibeissue:latest
     container_name: slashvibeissue
     environment:
