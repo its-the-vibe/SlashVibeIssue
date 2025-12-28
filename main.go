@@ -192,7 +192,7 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 	var initialTitle, initialDescription string
 	var preselectCopilot bool
 
-	if text == "✨" {
+	if text == ":sparkles:" {
 		initialTitle = "✨ Set up Copilot instructions"
 		initialDescription = "Configure instructions for this repository as documented in [Best practices for Copilot coding agent in your repository](https://gh.io/copilot-coding-agent-tips).\n\n<Onboard this repo>"
 		preselectCopilot = true
@@ -247,7 +247,7 @@ func createIssueModal(initialTitle, initialDescription string, preselectCopilot 
 	copilotOption := &slack.OptionBlockObject{
 		Text: &slack.TextBlockObject{
 			Type: slack.PlainTextType,
-			Text: "Assign to Copilot by default",
+			Text: "Assign to Copilot",
 		},
 		Value: "true",
 	}
