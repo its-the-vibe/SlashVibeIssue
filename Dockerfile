@@ -1,6 +1,9 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
+# Install ca-certificates for HTTPS
+RUN apk add --no-cache ca-certificates && update-ca-certificates
+
 WORKDIR /build
 
 # Copy go mod files
