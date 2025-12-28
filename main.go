@@ -56,7 +56,7 @@ type ViewSubmission struct {
 
 type SlackLinerMessage struct {
 	Channel string `json:"channel"`
-	Message string `json:"message"`
+	Text    string `json:"text"`
 	TTL     int    `json:"ttl"`
 }
 
@@ -454,7 +454,7 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 
 	slackLinerMsg := SlackLinerMessage{
 		Channel: config.ConfirmationChannel,
-		Message: message,
+		Text:    message,
 		TTL:     config.ConfirmationTTL,
 	}
 
