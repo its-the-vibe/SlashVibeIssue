@@ -79,7 +79,7 @@ func loadConfig() Config {
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
-		ConfirmationChannel:        getEnv("CONFIRMATION_CHANNEL", "gh-issues"),
+		ConfirmationChannel:        getEnv("CONFIRMATION_CHANNEL", "#gh-issues"),
 		ConfirmationTTL:            getEnv("CONFIRMATION_TTL", "48h"),
 	}
 }
