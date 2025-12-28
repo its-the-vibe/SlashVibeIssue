@@ -1,0 +1,8 @@
+.git
+.gitignore
+README.md
+*.md
+slashvibeissue
+*.test
+*.out
+.env

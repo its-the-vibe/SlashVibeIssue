@@ -1,0 +1,426 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+	"github.com/slack-go/slack"
+)
+
+type Config struct {
+	RedisAddr                  string
+	RedisPassword              string
+	RedisChannel               string
+	RedisViewSubmissionChannel string
+	RedisPoppitList            string
+	SlackBotToken              string
+	GitHubOrg                  string
+	WorkingDir                 string
+	ConfirmationChannel        string
+	ConfirmationTTL            string
+}
+
+type SlackCommand struct {
+	Command     string `json:"command"`
+	Text        string `json:"text"`
+	ResponseURL string `json:"response_url"`
+	TriggerID   string `json:"trigger_id"`
+	UserID      string `json:"user_id"`
+	UserName    string `json:"user_name"`
+	ChannelID   string `json:"channel_id"`
+}
+
+type ViewSubmission struct {
+	Type string `json:"type"`
+	View struct {
+		CallbackID string `json:"callback_id"`
+		State      struct {
+			Values map[string]map[string]interface{} `json:"values"`
+		} `json:"state"`
+	} `json:"view"`
+	User struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	} `json:"user"`
+}
+
+type PoppitMessage struct {
+	Channel string `json:"channel"`
+	Message string `json:"message"`
+	TTL     string `json:"ttl"`
+}
+
+func loadConfig() Config {
+	return Config{
+		RedisAddr:                  getEnv("REDIS_ADDR", "host.docker.internal:6379"),
+		RedisPassword:              getEnv("REDIS_PASSWORD", ""),
+		RedisChannel:               getEnv("REDIS_CHANNEL", "slack-commands"),
+		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
+		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:notifications"),
+		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
+		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
+		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
+		ConfirmationChannel:        getEnv("CONFIRMATION_CHANNEL", "gh-issues"),
+		ConfirmationTTL:            getEnv("CONFIRMATION_TTL", "48h"),
+	}
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func main() {
+	config := loadConfig()
+
+	if config.SlackBotToken == "" {
+		log.Fatal("SLACK_BOT_TOKEN is required")
+	}
+	if config.GitHubOrg == "" {
+		log.Fatal("GITHUB_ORG is required")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Setup Redis client
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     config.RedisAddr,
+		Password: config.RedisPassword,
+		DB:       0,
+	})
+	defer rdb.Close()
+
+	// Test Redis connection
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	log.Println("Connected to Redis")
+
+	// Setup Slack client
+	slackClient := slack.New(config.SlackBotToken)
+
+	// Start subscribers
+	go subscribeToSlashCommands(ctx, rdb, slackClient, config)
+	go subscribeToViewSubmissions(ctx, rdb, slackClient, config)
+
+	log.Println("SlashVibeIssue service started")
+
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+
+	log.Println("Shutting down...")
+	cancel()
+	time.Sleep(1 * time.Second)
+}
+
+func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
+	pubsub := rdb.Subscribe(ctx, config.RedisChannel)
+	defer pubsub.Close()
+
+	log.Printf("Subscribed to Redis channel: %s", config.RedisChannel)
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			handleSlashCommand(ctx, slackClient, msg.Payload, config)
+		}
+	}
+}
+
+func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload string, config Config) {
+	var cmd SlackCommand
+	if err := json.Unmarshal([]byte(payload), &cmd); err != nil {
+		log.Printf("Error unmarshaling slash command: %v", err)
+		return
+	}
+
+	// Only handle /new-issue command
+	if cmd.Command != "/new-issue" {
+		return
+	}
+
+	log.Printf("Received /new-issue command from user %s", cmd.UserName)
+
+	// Open modal
+	modal := createIssueModal()
+	_, err := slackClient.OpenView(cmd.TriggerID, modal)
+	if err != nil {
+		log.Printf("Error opening modal: %v", err)
+		return
+	}
+
+	log.Println("Modal opened successfully")
+}
+
+func createIssueModal() slack.ModalViewRequest {
+	return slack.ModalViewRequest{
+		Type:       slack.VTModal,
+		CallbackID: "create_github_issue_modal",
+		Title: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "New GitHub Issue 🐙",
+		},
+		Submit: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Create Issue",
+		},
+		Close: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Cancel",
+		},
+		Blocks: slack.Blocks{
+			BlockSet: []slack.Block{
+				&slack.SectionBlock{
+					Type: slack.MBTSection,
+					Text: &slack.TextBlockObject{
+						Type: slack.MarkdownType,
+						Text: "Fill out the details below to open a new issue in your repository.",
+					},
+				},
+				&slack.InputBlock{
+					Type:    slack.MBTInput,
+					BlockID: "repo_selection_block",
+					Label: &slack.TextBlockObject{
+						Type: slack.PlainTextType,
+						Text: "Select Repository",
+					},
+					Element: &slack.SelectBlockElement{
+						Type:     slack.OptTypeExternal,
+						ActionID: "SlashVibeIssue",
+						Placeholder: &slack.TextBlockObject{
+							Type: slack.PlainTextType,
+							Text: "Search for a repo...",
+						},
+					},
+				},
+				&slack.InputBlock{
+					Type:    slack.MBTInput,
+					BlockID: "title_block",
+					Label: &slack.TextBlockObject{
+						Type: slack.PlainTextType,
+						Text: "Issue Title",
+					},
+					Element: &slack.PlainTextInputBlockElement{
+						Type:     slack.METPlainTextInput,
+						ActionID: "issue_title",
+						Placeholder: &slack.TextBlockObject{
+							Type: slack.PlainTextType,
+							Text: "Brief summary of the issue",
+						},
+					},
+				},
+				&slack.InputBlock{
+					Type:    slack.MBTInput,
+					BlockID: "description_block",
+					Label: &slack.TextBlockObject{
+						Type: slack.PlainTextType,
+						Text: "Description",
+					},
+					Element: &slack.PlainTextInputBlockElement{
+						Type:      slack.METPlainTextInput,
+						ActionID:  "issue_description",
+						Multiline: true,
+						Placeholder: &slack.TextBlockObject{
+							Type: slack.PlainTextType,
+							Text: "Provide more details, reproduction steps, etc.",
+						},
+					},
+				},
+				&slack.ActionBlock{
+					Type:    slack.MBTAction,
+					BlockID: "assignment_block",
+					Elements: &slack.BlockElements{
+						ElementSet: []slack.BlockElement{
+							slack.NewCheckboxGroupsBlockElement(
+								"assign_copilot",
+								&slack.OptionBlockObject{
+									Text: &slack.TextBlockObject{
+										Type: slack.PlainTextType,
+										Text: "Assign to Copilot by default",
+									},
+									Value: "true",
+								},
+							),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func subscribeToViewSubmissions(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
+	pubsub := rdb.Subscribe(ctx, config.RedisViewSubmissionChannel)
+	defer pubsub.Close()
+
+	log.Printf("Subscribed to Redis channel: %s", config.RedisViewSubmissionChannel)
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			handleViewSubmission(ctx, rdb, slackClient, msg.Payload, config)
+		}
+	}
+}
+
+func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
+	var submission ViewSubmission
+	if err := json.Unmarshal([]byte(payload), &submission); err != nil {
+		log.Printf("Error unmarshaling view submission: %v", err)
+		return
+	}
+
+	// Only handle our specific callback_id
+	if submission.View.CallbackID != "create_github_issue_modal" {
+		return
+	}
+
+	log.Printf("Received view submission from user %s", submission.User.Username)
+
+	// Extract values from the submission
+	values := submission.View.State.Values
+
+	// Get repository
+	var repo string
+	if repoBlock, ok := values["repo_selection_block"]; ok {
+		if repoData, ok := repoBlock["SlashVibeIssue"]; ok {
+			if repoMap, ok := repoData.(map[string]interface{}); ok {
+				if selectedOption, ok := repoMap["selected_option"].(map[string]interface{}); ok {
+					if value, ok := selectedOption["value"].(string); ok {
+						repo = value
+					}
+				}
+			}
+		}
+	}
+
+	// Get title
+	var title string
+	if titleBlock, ok := values["title_block"]; ok {
+		if titleData, ok := titleBlock["issue_title"]; ok {
+			if titleMap, ok := titleData.(map[string]interface{}); ok {
+				if value, ok := titleMap["value"].(string); ok {
+					title = value
+				}
+			}
+		}
+	}
+
+	// Get description
+	var description string
+	if descBlock, ok := values["description_block"]; ok {
+		if descData, ok := descBlock["issue_description"]; ok {
+			if descMap, ok := descData.(map[string]interface{}); ok {
+				if value, ok := descMap["value"].(string); ok {
+					description = value
+				}
+			}
+		}
+	}
+
+	// Check if copilot assignment is selected
+	assignToCopilot := false
+	if assignBlock, ok := values["assignment_block"]; ok {
+		if assignData, ok := assignBlock["assign_copilot"]; ok {
+			if assignMap, ok := assignData.(map[string]interface{}); ok {
+				if selectedOptions, ok := assignMap["selected_options"].([]interface{}); ok {
+					assignToCopilot = len(selectedOptions) > 0
+				}
+			}
+		}
+	}
+
+	if repo == "" || title == "" {
+		log.Println("Missing required fields: repo or title")
+		return
+	}
+
+	// Create GitHub issue
+	issueURL, err := createGitHubIssue(repo, title, description, assignToCopilot, config)
+	if err != nil {
+		log.Printf("Error creating GitHub issue: %v", err)
+		return
+	}
+
+	log.Printf("GitHub issue created: %s", issueURL)
+
+	// Send confirmation message via Poppit
+	sendConfirmation(ctx, rdb, repo, title, issueURL, submission.User.Username, config)
+}
+
+func createGitHubIssue(repo, title, description string, assignToCopilot bool, config Config) (string, error) {
+	// Build the gh command
+	args := []string{"issue", "create", "--repo", fmt.Sprintf("%s/%s", config.GitHubOrg, repo), "--title", title}
+
+	if description != "" {
+		args = append(args, "--body", description)
+	}
+
+	if assignToCopilot {
+		args = append(args, "--assignee", "@copilot")
+	}
+
+	// Execute gh command
+	cmd := exec.Command("gh", args...)
+	cmd.Dir = config.WorkingDir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to create issue: %v, output: %s", err, string(output))
+	}
+
+	// Extract issue URL from output
+	issueURL := strings.TrimSpace(string(output))
+	return issueURL, nil
+}
+
+func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, issueURL, username string, config Config) {
+	message := fmt.Sprintf("✅ *New GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s\n*URL:* <%s>",
+		username, config.GitHubOrg, repo, title, issueURL)
+
+	poppitMsg := PoppitMessage{
+		Channel: config.ConfirmationChannel,
+		Message: message,
+		TTL:     config.ConfirmationTTL,
+	}
+
+	payload, err := json.Marshal(poppitMsg)
+	if err != nil {
+		log.Printf("Error marshaling Poppit message: %v", err)
+		return
+	}
+
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		log.Printf("Error pushing to Poppit list: %v", err)
+		return
+	}
+
+	log.Printf("Confirmation message sent to Poppit for issue: %s", issueURL)
+}
