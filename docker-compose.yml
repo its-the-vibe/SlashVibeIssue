@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  slashvibeissue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: slashvibeissue:latest
+    container_name: slashvibeissue
+    environment:
+      - REDIS_ADDR=${REDIS_ADDR:-host.docker.internal:6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_CHANNEL=${REDIS_CHANNEL:-slack-commands}
+      - REDIS_VIEW_SUBMISSION_CHANNEL=${REDIS_VIEW_SUBMISSION_CHANNEL:-slack-relay-view-submission}
+      - REDIS_POPPIT_LIST=${REDIS_POPPIT_LIST:-poppit:notifications}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - GITHUB_ORG=${GITHUB_ORG}
+      - WORKING_DIR=${WORKING_DIR:-/tmp}
+      - CONFIRMATION_CHANNEL=${CONFIRMATION_CHANNEL:-gh-issues}
+      - CONFIRMATION_TTL=${CONFIRMATION_TTL:-48h}
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
