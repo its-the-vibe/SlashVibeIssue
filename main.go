@@ -171,8 +171,8 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 
 	log.Printf("Received /issue command from user %s", cmd.UserName)
 
-	// Open modal
-	modal := createIssueModal()
+	// Open modal with optional pre-populated title from cmd.Text
+	modal := createIssueModal(strings.TrimSpace(cmd.Text))
 	_, err := slackClient.OpenView(cmd.TriggerID, modal)
 	if err != nil {
 		log.Printf("Error opening modal: %v", err)
@@ -182,7 +182,21 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 	log.Println("Modal opened successfully")
 }
 
-func createIssueModal() slack.ModalViewRequest {
+func createIssueModal(initialTitle string) slack.ModalViewRequest {
+	titleInput := &slack.PlainTextInputBlockElement{
+		Type:     slack.METPlainTextInput,
+		ActionID: "issue_title",
+		Placeholder: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Brief summary of the issue",
+		},
+	}
+
+	// Pre-populate title if provided
+	if initialTitle != "" {
+		titleInput.InitialValue = initialTitle
+	}
+
 	return slack.ModalViewRequest{
 		Type:       slack.VTModal,
 		CallbackID: "create_github_issue_modal",
@@ -230,14 +244,7 @@ func createIssueModal() slack.ModalViewRequest {
 						Type: slack.PlainTextType,
 						Text: "Issue Title",
 					},
-					Element: &slack.PlainTextInputBlockElement{
-						Type:     slack.METPlainTextInput,
-						ActionID: "issue_title",
-						Placeholder: &slack.TextBlockObject{
-							Type: slack.PlainTextType,
-							Text: "Brief summary of the issue",
-						},
-					},
+					Element: titleInput,
 				},
 				&slack.InputBlock{
 					Type:    slack.MBTInput,
