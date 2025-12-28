@@ -415,7 +415,7 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 }
 
 func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username string, config Config) {
-	message := fmt.Sprintf("✅ *New GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s",
+	message := fmt.Sprintf("⏳ *GitHub Issue Creation Initiated by @%s*\n\n*Repository:* %s/%s\n*Title:* %s",
 		username, config.GitHubOrg, repo, title)
 
 	slackLinerMsg := SlackLinerMessage{
