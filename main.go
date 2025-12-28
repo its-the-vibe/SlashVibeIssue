@@ -74,7 +74,7 @@ func loadConfig() Config {
 		RedisPassword:              getEnv("REDIS_PASSWORD", ""),
 		RedisChannel:               getEnv("REDIS_CHANNEL", "slack-commands"),
 		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
-		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slackliner:notifications"),
+		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
