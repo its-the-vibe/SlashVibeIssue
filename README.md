@@ -4,7 +4,7 @@ Slack Slash Command for creating a new GitHub issue
 
 ## Overview
 
-SlashVibeIssue is a Go service that listens for Slack slash commands via Redis and creates GitHub issues through an interactive modal dialog. When users run `/new-issue` in Slack, they're presented with a form to fill in issue details, select a repository, and optionally assign the issue to GitHub Copilot.
+SlashVibeIssue is a Go service that listens for Slack slash commands via Redis and creates GitHub issues through an interactive modal dialog. When users run `/issue` in Slack, they're presented with a form to fill in issue details, select a repository, and optionally assign the issue to GitHub Copilot.
 
 ## Features
 
@@ -18,7 +18,7 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 ## Architecture
 
 The service subscribes to two Redis channels:
-1. **Slash commands channel** (default: `slack-commands`) - Receives `/new-issue` commands
+1. **Slash commands channel** (default: `slack-commands`) - Receives `/issue` commands
 2. **View submission channel** (default: `slack-relay-view-submission`) - Receives modal submissions
 
 When a modal is submitted, the service:
@@ -84,7 +84,7 @@ docker-compose up
 
 ## Usage
 
-1. In Slack, type `/new-issue`
+1. In Slack, type `/issue`
 2. Fill in the modal:
    - Select a repository (external select - requires integration)
    - Enter issue title

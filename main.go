@@ -164,12 +164,12 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 		return
 	}
 
-	// Only handle /new-issue command
-	if cmd.Command != "/new-issue" {
+	// Only handle /issue command
+	if cmd.Command != "/issue" {
 		return
 	}
 
-	log.Printf("Received /new-issue command from user %s", cmd.UserName)
+	log.Printf("Received /issue command from user %s", cmd.UserName)
 
 	// Open modal
 	modal := createIssueModal()
