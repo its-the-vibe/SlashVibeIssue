@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -59,10 +60,12 @@ type SlackLinerMessage struct {
 }
 
 type PoppitCommand struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	WorkDir string            `json:"workdir"`
-	Env     map[string]string `json:"env,omitempty"`
+	Repo     string                 `json:"repo"`
+	Branch   string                 `json:"branch"`
+	Type     string                 `json:"type"`
+	Dir      string                 `json:"dir"`
+	Commands []string               `json:"commands"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 func loadConfig() Config {
@@ -382,22 +385,30 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 }
 
 func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot bool, config Config) error {
-	// Build the gh command
-	args := []string{"issue", "create", "--repo", fmt.Sprintf("%s/%s", config.GitHubOrg, repo), "--title", title}
+	// Build the full repository name
+	repoFullName := fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
+
+	// Build the gh command with proper escaping
+	// Escape single quotes in title and description
+	escapedTitle := strings.ReplaceAll(title, `'`, `'\''`)
+	ghCmd := fmt.Sprintf("gh issue create --repo %s --title '%s'", repoFullName, escapedTitle)
 
 	if description != "" {
-		args = append(args, "--body", description)
+		escapedDesc := strings.ReplaceAll(description, `'`, `'\''`)
+		ghCmd = fmt.Sprintf("%s --body '%s'", ghCmd, escapedDesc)
 	}
 
 	if assignToCopilot {
-		args = append(args, "--assignee", "@copilot")
+		ghCmd = fmt.Sprintf("%s --assignee @copilot", ghCmd)
 	}
 
 	// Create Poppit command message
 	poppitCmd := PoppitCommand{
-		Command: "gh",
-		Args:    args,
-		WorkDir: config.WorkingDir,
+		Repo:     repoFullName,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue",
+		Dir:      config.WorkingDir,
+		Commands: []string{ghCmd},
 	}
 
 	payload, err := json.Marshal(poppitCmd)
