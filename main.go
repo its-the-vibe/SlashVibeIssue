@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -21,6 +20,7 @@ type Config struct {
 	RedisPassword              string
 	RedisChannel               string
 	RedisViewSubmissionChannel string
+	RedisSlackLinerList        string
 	RedisPoppitList            string
 	SlackBotToken              string
 	GitHubOrg                  string
@@ -53,10 +53,19 @@ type ViewSubmission struct {
 	} `json:"user"`
 }
 
-type PoppitMessage struct {
+type SlackLinerMessage struct {
 	Channel string `json:"channel"`
 	Message string `json:"message"`
 	TTL     string `json:"ttl"`
+}
+
+type PoppitCommand struct {
+	Repo     string                 `json:"repo"`
+	Branch   string                 `json:"branch"`
+	Type     string                 `json:"type"`
+	Dir      string                 `json:"dir"`
+	Commands []string               `json:"commands"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 func loadConfig() Config {
@@ -65,7 +74,8 @@ func loadConfig() Config {
 		RedisPassword:              getEnv("REDIS_PASSWORD", ""),
 		RedisChannel:               getEnv("REDIS_CHANNEL", "slack-commands"),
 		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
-		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:notifications"),
+		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slackliner:notifications"),
+		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
@@ -361,66 +371,81 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 		return
 	}
 
-	// Create GitHub issue
-	issueURL, err := createGitHubIssue(repo, title, description, assignToCopilot, config)
+	// Create GitHub issue via Poppit
+	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, config)
 	if err != nil {
 		log.Printf("Error creating GitHub issue: %v", err)
 		return
 	}
 
-	log.Printf("GitHub issue created: %s", issueURL)
+	log.Printf("GitHub issue creation command sent to Poppit for repo: %s/%s", config.GitHubOrg, repo)
 
-	// Send confirmation message via Poppit
-	sendConfirmation(ctx, rdb, repo, title, issueURL, submission.User.Username, config)
+	// Send confirmation message via SlackLiner
+	sendConfirmation(ctx, rdb, repo, title, submission.User.Username, config)
 }
 
-func createGitHubIssue(repo, title, description string, assignToCopilot bool, config Config) (string, error) {
-	// Build the gh command
-	args := []string{"issue", "create", "--repo", fmt.Sprintf("%s/%s", config.GitHubOrg, repo), "--title", title}
+func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot bool, config Config) error {
+	// Build the full repository name
+	repoFullName := fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
+
+	// Build the gh command with proper escaping
+	// Escape single quotes in title and description
+	escapedTitle := strings.ReplaceAll(title, `'`, `'\''`)
+	ghCmd := fmt.Sprintf("gh issue create --repo %s --title '%s'", repoFullName, escapedTitle)
 
 	if description != "" {
-		args = append(args, "--body", description)
+		escapedDesc := strings.ReplaceAll(description, `'`, `'\''`)
+		ghCmd = fmt.Sprintf("%s --body '%s'", ghCmd, escapedDesc)
 	}
 
 	if assignToCopilot {
-		args = append(args, "--assignee", "@copilot")
+		ghCmd = fmt.Sprintf("%s --assignee @copilot", ghCmd)
 	}
 
-	// Execute gh command
-	cmd := exec.Command("gh", args...)
-	cmd.Dir = config.WorkingDir
+	// Create Poppit command message
+	poppitCmd := PoppitCommand{
+		Repo:     repoFullName,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue",
+		Dir:      config.WorkingDir,
+		Commands: []string{ghCmd},
+	}
 
-	output, err := cmd.CombinedOutput()
+	payload, err := json.Marshal(poppitCmd)
 	if err != nil {
-		return "", fmt.Errorf("failed to create issue: %v, output: %s", err, string(output))
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
 	}
 
-	// Extract issue URL from output
-	issueURL := strings.TrimSpace(string(output))
-	return issueURL, nil
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	return nil
 }
 
-func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, issueURL, username string, config Config) {
-	message := fmt.Sprintf("✅ *New GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s\n*URL:* <%s>",
-		username, config.GitHubOrg, repo, title, issueURL)
+func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username string, config Config) {
+	message := fmt.Sprintf("⏳ *GitHub Issue Creation Initiated by @%s*\n\n*Repository:* %s/%s\n*Title:* %s",
+		username, config.GitHubOrg, repo, title)
 
-	poppitMsg := PoppitMessage{
+	slackLinerMsg := SlackLinerMessage{
 		Channel: config.ConfirmationChannel,
 		Message: message,
 		TTL:     config.ConfirmationTTL,
 	}
 
-	payload, err := json.Marshal(poppitMsg)
+	payload, err := json.Marshal(slackLinerMsg)
 	if err != nil {
-		log.Printf("Error marshaling Poppit message: %v", err)
+		log.Printf("Error marshaling SlackLiner message: %v", err)
 		return
 	}
 
-	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	err = rdb.RPush(ctx, config.RedisSlackLinerList, payload).Err()
 	if err != nil {
-		log.Printf("Error pushing to Poppit list: %v", err)
+		log.Printf("Error pushing to SlackLiner list: %v", err)
 		return
 	}
 
-	log.Printf("Confirmation message sent to Poppit for issue: %s", issueURL)
+	log.Printf("Confirmation message sent to SlackLiner for issue in repo: %s/%s", config.GitHubOrg, repo)
 }

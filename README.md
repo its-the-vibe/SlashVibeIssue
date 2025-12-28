@@ -10,8 +10,8 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 
 - 🎯 Interactive Slack modal for creating GitHub issues
 - 🔄 Redis pub/sub for receiving Slack commands and view submissions
-- 🐙 GitHub CLI integration for issue creation
-- ✅ Automatic confirmation messages via Poppit
+- 🐙 Poppit integration for executing GitHub CLI commands
+- ✅ Automatic confirmation messages via SlackLiner
 - 🐳 Docker containerization with scratch runtime
 - ⚙️ Configuration via environment variables
 
@@ -23,8 +23,8 @@ The service subscribes to two Redis channels:
 
 When a modal is submitted, the service:
 1. Extracts repository, title, description, and assignment preference
-2. Creates a GitHub issue using `gh` CLI
-3. Publishes a confirmation message to the Poppit list for delivery to Slack
+2. Sends a GitHub issue creation command to Poppit for execution
+3. Publishes a confirmation message to the SlackLiner list for delivery to Slack
 
 ## Configuration
 
@@ -36,7 +36,8 @@ Environment variables:
 | `REDIS_PASSWORD` | _(empty)_ | Redis password |
 | `REDIS_CHANNEL` | `slack-commands` | Channel for slash commands |
 | `REDIS_VIEW_SUBMISSION_CHANNEL` | `slack-relay-view-submission` | Channel for view submissions |
-| `REDIS_POPPIT_LIST` | `poppit:notifications` | Redis list for Poppit messages |
+| `REDIS_SLACKLINER_LIST` | `slackliner:notifications` | Redis list for SlackLiner messages |
+| `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
 | `SLACK_BOT_TOKEN` | _(required)_ | Slack bot token |
 | `GITHUB_ORG` | _(required)_ | GitHub organization name |
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |
@@ -65,7 +66,8 @@ docker-compose up -d
 ### Prerequisites
 - Go 1.24+ (for local development)
 - Redis server
-- GitHub CLI (`gh`) configured with authentication
+- Poppit service (for executing GitHub CLI commands)
+- SlackLiner service (for sending confirmation messages)
 - Slack workspace with bot token
 
 ### Local Development
@@ -93,9 +95,8 @@ docker-compose up
 
 ## Integration Points
 
-- **Poppit**: For sending timed confirmation messages to Slack
-- **SlackLiner**: Message delivery system (Poppit publishes to this)
-- **GitHub CLI**: For creating issues programmatically
+- **Poppit**: For executing GitHub CLI commands asynchronously
+- **SlackLiner**: For sending timed confirmation messages to Slack
 
 ## Modal Structure
 
