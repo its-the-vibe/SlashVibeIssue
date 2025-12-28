@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -26,7 +27,7 @@ type Config struct {
 	GitHubOrg                  string
 	WorkingDir                 string
 	ConfirmationChannel        string
-	ConfirmationTTL            string
+	ConfirmationTTL            int
 }
 
 type SlackCommand struct {
@@ -56,7 +57,7 @@ type ViewSubmission struct {
 type SlackLinerMessage struct {
 	Channel string `json:"channel"`
 	Message string `json:"message"`
-	TTL     string `json:"ttl"`
+	TTL     int    `json:"ttl"`
 }
 
 type PoppitCommand struct {
@@ -80,8 +81,23 @@ func loadConfig() Config {
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
 		ConfirmationChannel:        getEnv("CONFIRMATION_CHANNEL", "#gh-issues"),
-		ConfirmationTTL:            getEnv("CONFIRMATION_TTL", "48h"),
+		ConfirmationTTL:            getEnvAsIntSeconds("CONFIRMATION_TTL", "48h"),
 	}
+}
+
+func getEnvAsIntSeconds(key, defaultValue string) int {
+	val := os.Getenv(key)
+	if val == "" {
+		val = defaultValue
+	}
+	if i, err := strconv.Atoi(val); err == nil {
+		return i
+	}
+	if d, err := time.ParseDuration(val); err == nil {
+		return int(d.Seconds())
+	}
+	log.Printf("Unable to parse %s=%q as int seconds or duration; defaulting to 0", key, val)
+	return 0
 }
 
 func getEnv(key, defaultValue string) string {
