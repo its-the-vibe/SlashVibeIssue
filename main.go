@@ -243,29 +243,24 @@ func createIssueModal(initialTitle, initialDescription string, preselectCopilot 
 		descriptionInput.InitialValue = initialDescription
 	}
 
+	// Create checkbox option
+	copilotOption := &slack.OptionBlockObject{
+		Text: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Assign to Copilot by default",
+		},
+		Value: "true",
+	}
+
 	// Create checkbox element with optional pre-selection
 	checkboxElement := slack.NewCheckboxGroupsBlockElement(
 		"assign_copilot",
-		&slack.OptionBlockObject{
-			Text: &slack.TextBlockObject{
-				Type: slack.PlainTextType,
-				Text: "Assign to Copilot by default",
-			},
-			Value: "true",
-		},
+		copilotOption,
 	)
 
 	// Pre-select the checkbox if requested
 	if preselectCopilot {
-		checkboxElement.InitialOptions = []*slack.OptionBlockObject{
-			{
-				Text: &slack.TextBlockObject{
-					Type: slack.PlainTextType,
-					Text: "Assign to Copilot by default",
-				},
-				Value: "true",
-			},
-		}
+		checkboxElement.InitialOptions = []*slack.OptionBlockObject{copilotOption}
 	}
 
 	return slack.ModalViewRequest{
