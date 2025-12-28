@@ -187,8 +187,23 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 
 	log.Printf("Received /issue command from user %s", cmd.UserName)
 
-	// Open modal with optional pre-populated title from cmd.Text
-	modal := createIssueModal(strings.TrimSpace(cmd.Text))
+	// Check if the text is the sparkles emoji for setup-ai command
+	text := strings.TrimSpace(cmd.Text)
+	var initialTitle, initialDescription string
+	var preselectCopilot bool
+
+	if text == "✨" {
+		initialTitle = "✨ Set up Copilot instructions"
+		initialDescription = "Configure instructions for this repository as documented in [Best practices for Copilot coding agent in your repository](https://gh.io/copilot-coding-agent-tips).\n\n<Onboard this repo>"
+		preselectCopilot = true
+	} else {
+		initialTitle = text
+		initialDescription = ""
+		preselectCopilot = false
+	}
+
+	// Open modal with pre-populated values
+	modal := createIssueModal(initialTitle, initialDescription, preselectCopilot)
 	_, err := slackClient.OpenView(cmd.TriggerID, modal)
 	if err != nil {
 		log.Printf("Error opening modal: %v", err)
@@ -198,7 +213,7 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 	log.Println("Modal opened successfully")
 }
 
-func createIssueModal(initialTitle string) slack.ModalViewRequest {
+func createIssueModal(initialTitle, initialDescription string, preselectCopilot bool) slack.ModalViewRequest {
 	titleInput := &slack.PlainTextInputBlockElement{
 		Type:     slack.METPlainTextInput,
 		ActionID: "issue_title",
@@ -211,6 +226,41 @@ func createIssueModal(initialTitle string) slack.ModalViewRequest {
 	// Pre-populate title if provided
 	if initialTitle != "" {
 		titleInput.InitialValue = initialTitle
+	}
+
+	descriptionInput := &slack.PlainTextInputBlockElement{
+		Type:      slack.METPlainTextInput,
+		ActionID:  "issue_description",
+		Multiline: true,
+		Placeholder: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Provide more details, reproduction steps, etc.",
+		},
+	}
+
+	// Pre-populate description if provided
+	if initialDescription != "" {
+		descriptionInput.InitialValue = initialDescription
+	}
+
+	// Create checkbox option
+	copilotOption := &slack.OptionBlockObject{
+		Text: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Assign to Copilot by default",
+		},
+		Value: "true",
+	}
+
+	// Create checkbox element with optional pre-selection
+	checkboxElement := slack.NewCheckboxGroupsBlockElement(
+		"assign_copilot",
+		copilotOption,
+	)
+
+	// Pre-select the checkbox if requested
+	if preselectCopilot {
+		checkboxElement.InitialOptions = []*slack.OptionBlockObject{copilotOption}
 	}
 
 	return slack.ModalViewRequest{
@@ -269,31 +319,14 @@ func createIssueModal(initialTitle string) slack.ModalViewRequest {
 						Type: slack.PlainTextType,
 						Text: "Description",
 					},
-					Element: &slack.PlainTextInputBlockElement{
-						Type:      slack.METPlainTextInput,
-						ActionID:  "issue_description",
-						Multiline: true,
-						Placeholder: &slack.TextBlockObject{
-							Type: slack.PlainTextType,
-							Text: "Provide more details, reproduction steps, etc.",
-						},
-					},
+					Element: descriptionInput,
 				},
 				&slack.ActionBlock{
 					Type:    slack.MBTAction,
 					BlockID: "assignment_block",
 					Elements: &slack.BlockElements{
 						ElementSet: []slack.BlockElement{
-							slack.NewCheckboxGroupsBlockElement(
-								"assign_copilot",
-								&slack.OptionBlockObject{
-									Text: &slack.TextBlockObject{
-										Type: slack.PlainTextType,
-										Text: "Assign to Copilot by default",
-									},
-									Value: "true",
-								},
-							),
+							checkboxElement,
 						},
 					},
 				},
