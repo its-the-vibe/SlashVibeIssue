@@ -191,12 +191,12 @@ func createIssueModal(initialTitle string) slack.ModalViewRequest {
 			Text: "Brief summary of the issue",
 		},
 	}
-	
+
 	// Pre-populate title if provided
 	if initialTitle != "" {
 		titleInput.InitialValue = initialTitle
 	}
-	
+
 	return slack.ModalViewRequest{
 		Type:       slack.VTModal,
 		CallbackID: "create_github_issue_modal",
