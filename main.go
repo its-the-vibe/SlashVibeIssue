@@ -266,10 +266,10 @@ func createIssueModal(initialTitle, initialDescription string, preselectCopilot 
 	return slack.ModalViewRequest{
 		Type:       slack.VTModal,
 		CallbackID: "create_github_issue_modal",
-		Title: slack.NewTextBlockObject(slack.PlainTextType,
-			"New GitHub Issue :octopus:",
-			true,
-			false),
+		Title: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "New GitHub Issue",
+		},
 		Submit: &slack.TextBlockObject{
 			Type: slack.PlainTextType,
 			Text: "Create Issue",
