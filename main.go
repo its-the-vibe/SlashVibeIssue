@@ -603,7 +603,7 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, 
 	}
 
 	// Only process output from "gh issue create" commands
-	if !strings.Contains(output.Command, "gh issue create") {
+	if !strings.HasPrefix(output.Command, "gh issue create") {
 		log.Printf("Ignoring non-issue-create command: %s", output.Command)
 		return
 	}
@@ -648,13 +648,26 @@ func extractIssueURL(output string) string {
 }
 
 func addIssueToProject(ctx context.Context, rdb *redis.Client, issueURL string, config Config) error {
+	// Validate issue URL format
+	if !strings.HasPrefix(issueURL, "https://github.com/") || !strings.Contains(issueURL, "/issues/") {
+		return fmt.Errorf("invalid issue URL format: %s", issueURL)
+	}
+
 	// Build the gh command to add issue to project
 	ghCmd := fmt.Sprintf("gh project item-add %s --owner %s --url %s",
 		config.ProjectID, config.ProjectOrg, issueURL)
 
+	// Extract repo from the issue URL for consistency
+	// URL format: https://github.com/org/repo/issues/number
+	repo := config.GitHubOrg + "/SlashVibeIssue" // fallback
+	parts := strings.Split(issueURL, "/")
+	if len(parts) >= 5 {
+		repo = parts[3] + "/" + parts[4]
+	}
+
 	// Create Poppit command message
 	poppitCmd := PoppitCommand{
-		Repo:     fmt.Sprintf("%s/SlashVibeIssue", config.GitHubOrg), // Use a default repo for project commands
+		Repo:     repo,
 		Branch:   "refs/heads/main",
 		Type:     "slash-vibe-issue-project",
 		Dir:      config.WorkingDir,
