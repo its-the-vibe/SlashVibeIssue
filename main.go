@@ -585,7 +585,7 @@ func extractIssueURL(output string) string {
 	// Creating issue in its-the-vibe/SlashVibeIssue
 	//
 	// https://github.com/its-the-vibe/SlashVibeIssue/issues/13
-	
+
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
