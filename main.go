@@ -71,9 +71,10 @@ type PoppitCommand struct {
 }
 
 type PoppitOutput struct {
-	Type     string `json:"type"`
-	Output   string `json:"output"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Type     string                 `json:"type"`
+	Command  string                 `json:"command"`
+	Output   string                 `json:"output"`
 }
 
 func loadConfig() Config {
@@ -84,7 +85,7 @@ func loadConfig() Config {
 		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
 		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
-		RedisPoppitOutputChannel:   getEnv("REDIS_POPPIT_OUTPUT_CHANNEL", "poppit:output"),
+		RedisPoppitOutputChannel:   getEnv("REDIS_POPPIT_OUTPUT_CHANNEL", "poppit:command-output"),
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),

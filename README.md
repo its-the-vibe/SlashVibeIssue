@@ -20,7 +20,7 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 The service subscribes to three Redis channels:
 1. **Slash commands channel** (default: `slack-commands`) - Receives `/issue` commands
 2. **View submission channel** (default: `slack-relay-view-submission`) - Receives modal submissions
-3. **Poppit output channel** (default: `poppit:output`) - Receives command execution output from Poppit
+3. **Poppit output channel** (default: `poppit:command-output`) - Receives command execution output from Poppit
 
 When a modal is submitted, the service:
 1. Extracts repository, title, description, and assignment preference
@@ -41,7 +41,7 @@ Environment variables:
 | `REDIS_VIEW_SUBMISSION_CHANNEL` | `slack-relay-view-submission` | Channel for view submissions |
 | `REDIS_SLACKLINER_LIST` | `slackliner:notifications` | Redis list for SlackLiner messages |
 | `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
-| `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:output` | Redis channel for Poppit command output |
+| `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:command-output` | Redis channel for Poppit command output |
 | `SLACK_BOT_TOKEN` | _(required)_ | Slack bot token |
 | `GITHUB_ORG` | _(required)_ | GitHub organization name |
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |
