@@ -47,6 +47,8 @@ Environment variables:
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |
 | `CONFIRMATION_CHANNEL` | `gh-issues` | Slack channel for confirmations |
 | `CONFIRMATION_TTL` | `48h` | TTL for confirmation messages |
+| `PROJECT_ID` | `1` | GitHub project ID for automatic issue assignment |
+| `PROJECT_ORG` | `its-the-vibe` | GitHub organization for project assignment |
 
 ## Building
 
@@ -93,7 +95,8 @@ docker-compose up
    - Select a repository (external select - requires integration)
    - Enter issue title
    - Enter issue description
-   - Optionally check "Assign to Copilot by default"
+   - Optionally check "Assign to Copilot"
+   - "Add to project" checkbox is checked by default
 3. Click "Create Issue"
 4. Confirmation message appears in #gh-issues channel
 
@@ -109,6 +112,7 @@ The service uses the callback ID `create_github_issue_modal` to identify submiss
 - Issue title (plain text input)
 - Issue description (multiline text input)
 - Copilot assignment checkbox
+- Add to project checkbox (checked by default)
 
 ## License
 
