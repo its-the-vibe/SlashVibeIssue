@@ -75,6 +75,10 @@ docker-compose up -d
 - Poppit service (for executing GitHub CLI commands)
 - SlackLiner service (for sending confirmation messages)
 - Slack workspace with bot token
+- GitHub CLI (`gh`) with `project` scope for assigning issues to projects:
+  ```bash
+  gh auth refresh -s project
+  ```
 
 ### Local Development
 ```bash
