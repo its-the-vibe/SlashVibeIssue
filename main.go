@@ -29,6 +29,8 @@ type Config struct {
 	WorkingDir                 string
 	ConfirmationChannel        string
 	ConfirmationTTL            int
+	ProjectID                  string
+	ProjectOrg                 string
 }
 
 type SlackCommand struct {
@@ -91,6 +93,8 @@ func loadConfig() Config {
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
 		ConfirmationChannel:        getEnv("CONFIRMATION_CHANNEL", "#gh-issues"),
 		ConfirmationTTL:            getEnvAsIntSeconds("CONFIRMATION_TTL", "48h"),
+		ProjectID:                  getEnv("PROJECT_ID", "1"),
+		ProjectOrg:                 getEnv("PROJECT_ORG", "its-the-vibe"),
 	}
 }
 
@@ -273,6 +277,22 @@ func createIssueModal(initialTitle, initialDescription string, preselectCopilot 
 		checkboxElement.InitialOptions = []*slack.OptionBlockObject{copilotOption}
 	}
 
+	// Create project checkbox option
+	projectOption := &slack.OptionBlockObject{
+		Text: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Add to project",
+		},
+		Value: "true",
+	}
+
+	// Create project checkbox element (selected by default)
+	projectCheckboxElement := slack.NewCheckboxGroupsBlockElement(
+		"add_to_project",
+		projectOption,
+	)
+	projectCheckboxElement.InitialOptions = []*slack.OptionBlockObject{projectOption}
+
 	return slack.ModalViewRequest{
 		Type:       slack.VTModal,
 		CallbackID: "create_github_issue_modal",
@@ -337,6 +357,7 @@ func createIssueModal(initialTitle, initialDescription string, preselectCopilot 
 					Elements: &slack.BlockElements{
 						ElementSet: []slack.BlockElement{
 							checkboxElement,
+							projectCheckboxElement,
 						},
 					},
 				},
@@ -432,13 +453,25 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 		}
 	}
 
+	// Check if add to project is selected
+	addToProject := false
+	if assignBlock, ok := values["assignment_block"]; ok {
+		if projectData, ok := assignBlock["add_to_project"]; ok {
+			if projectMap, ok := projectData.(map[string]interface{}); ok {
+				if selectedOptions, ok := projectMap["selected_options"].([]interface{}); ok {
+					addToProject = len(selectedOptions) > 0
+				}
+			}
+		}
+	}
+
 	if repo == "" || title == "" {
 		log.Println("Missing required fields: repo or title")
 		return
 	}
 
 	// Create GitHub issue via Poppit
-	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, submission.User.Username, config)
+	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, addToProject, submission.User.Username, config)
 	if err != nil {
 		log.Printf("Error creating GitHub issue: %v", err)
 		return
@@ -447,7 +480,7 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 	log.Printf("GitHub issue creation command sent to Poppit for repo: %s/%s", config.GitHubOrg, repo)
 }
 
-func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot bool, username string, config Config) error {
+func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot, addToProject bool, username string, config Config) error {
 	// Build the full repository name
 	repoFullName := fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
 
@@ -473,9 +506,10 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 		Dir:      config.WorkingDir,
 		Commands: []string{ghCmd},
 		Metadata: map[string]interface{}{
-			"repo":     repo,
-			"title":    title,
-			"username": username,
+			"repo":         repo,
+			"title":        title,
+			"username":     username,
+			"addToProject": addToProject,
 		},
 	}
 
@@ -568,6 +602,12 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, 
 		return
 	}
 
+	// Only process output from "gh issue create" commands
+	if !strings.Contains(output.Command, "gh issue create") {
+		log.Printf("Ignoring non-issue-create command: %s", output.Command)
+		return
+	}
+
 	// Parse issue URL from output
 	issueURL := extractIssueURL(output.Output)
 	if issueURL == "" {
@@ -576,6 +616,16 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, 
 	}
 
 	log.Printf("Extracted issue URL: %s", issueURL)
+
+	// Check if we should add to project
+	addToProject, _ := metadata["addToProject"].(bool)
+	if addToProject {
+		log.Printf("Adding issue to project")
+		err := addIssueToProject(ctx, rdb, issueURL, config)
+		if err != nil {
+			log.Printf("Error adding issue to project: %v", err)
+		}
+	}
 
 	// Send confirmation message with issue URL
 	sendConfirmation(ctx, rdb, repo, title, username, issueURL, config)
@@ -595,4 +645,36 @@ func extractIssueURL(output string) string {
 		}
 	}
 	return ""
+}
+
+func addIssueToProject(ctx context.Context, rdb *redis.Client, issueURL string, config Config) error {
+	// Build the gh command to add issue to project
+	ghCmd := fmt.Sprintf("gh project item-add %s --owner %s --url %s",
+		config.ProjectID, config.ProjectOrg, issueURL)
+
+	// Create Poppit command message
+	poppitCmd := PoppitCommand{
+		Repo:     fmt.Sprintf("%s/SlashVibeIssue", config.GitHubOrg), // Use a default repo for project commands
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-project",
+		Dir:      config.WorkingDir,
+		Commands: []string{ghCmd},
+		Metadata: map[string]interface{}{
+			"issueURL": issueURL,
+		},
+	}
+
+	payload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
+	}
+
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	log.Printf("Project assignment command sent to Poppit for issue: %s", issueURL)
+	return nil
 }

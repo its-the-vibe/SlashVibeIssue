@@ -124,3 +124,28 @@ t.Errorf("extractIssueURL() = %q, want %q", result, tt.expected)
 })
 }
 }
+
+func TestCreateIssueModalWithProjectCheckbox(t *testing.T) {
+	// Test that the modal includes the "Add to project" checkbox selected by default
+	modal := createIssueModal("", "", false)
+
+	// Verify we have the expected number of blocks
+	if len(modal.Blocks.BlockSet) != 5 {
+		t.Errorf("Expected 5 blocks, got %d", len(modal.Blocks.BlockSet))
+	}
+
+	// Check assignment block (index 4)
+	assignmentBlock := modal.Blocks.BlockSet[4]
+	if actionBlock, ok := assignmentBlock.(*slack.ActionBlock); ok {
+		if actionBlock.BlockID != "assignment_block" {
+			t.Errorf("Expected block_id to be 'assignment_block', got '%s'", actionBlock.BlockID)
+		}
+		
+		// Verify we have 2 elements (assign to copilot and add to project checkboxes)
+		if len(actionBlock.Elements.ElementSet) != 2 {
+			t.Errorf("Expected 2 checkbox elements in assignment block, got %d", len(actionBlock.Elements.ElementSet))
+		}
+	} else {
+		t.Error("Expected block at index 4 to be an ActionBlock")
+	}
+}
