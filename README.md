@@ -17,14 +17,17 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 
 ## Architecture
 
-The service subscribes to two Redis channels:
+The service subscribes to three Redis channels:
 1. **Slash commands channel** (default: `slack-commands`) - Receives `/issue` commands
 2. **View submission channel** (default: `slack-relay-view-submission`) - Receives modal submissions
+3. **Poppit output channel** (default: `poppit:command-output`) - Receives command execution output from Poppit
 
 When a modal is submitted, the service:
 1. Extracts repository, title, description, and assignment preference
-2. Sends a GitHub issue creation command to Poppit for execution
-3. Publishes a confirmation message to the SlackLiner list for delivery to Slack
+2. Sends a GitHub issue creation command to Poppit with metadata for tracking
+3. Waits for Poppit to execute the command and publish the output
+4. Parses the issue URL from the command output
+5. Publishes a confirmation message to the SlackLiner list with the issue URL for delivery to Slack
 
 ## Configuration
 
@@ -38,6 +41,7 @@ Environment variables:
 | `REDIS_VIEW_SUBMISSION_CHANNEL` | `slack-relay-view-submission` | Channel for view submissions |
 | `REDIS_SLACKLINER_LIST` | `slackliner:notifications` | Redis list for SlackLiner messages |
 | `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
+| `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:command-output` | Redis channel for Poppit command output |
 | `SLACK_BOT_TOKEN` | _(required)_ | Slack bot token |
 | `GITHUB_ORG` | _(required)_ | GitHub organization name |
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |

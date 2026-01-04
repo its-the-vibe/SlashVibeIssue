@@ -23,6 +23,7 @@ type Config struct {
 	RedisViewSubmissionChannel string
 	RedisSlackLinerList        string
 	RedisPoppitList            string
+	RedisPoppitOutputChannel   string
 	SlackBotToken              string
 	GitHubOrg                  string
 	WorkingDir                 string
@@ -69,6 +70,13 @@ type PoppitCommand struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
+type PoppitOutput struct {
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Type     string                 `json:"type"`
+	Command  string                 `json:"command"`
+	Output   string                 `json:"output"`
+}
+
 func loadConfig() Config {
 	return Config{
 		RedisAddr:                  getEnv("REDIS_ADDR", "host.docker.internal:6379"),
@@ -77,6 +85,7 @@ func loadConfig() Config {
 		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
 		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
+		RedisPoppitOutputChannel:   getEnv("REDIS_POPPIT_OUTPUT_CHANNEL", "poppit:command-output"),
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
@@ -140,6 +149,7 @@ func main() {
 	// Start subscribers
 	go subscribeToSlashCommands(ctx, rdb, slackClient, config)
 	go subscribeToViewSubmissions(ctx, rdb, slackClient, config)
+	go subscribeToPoppitOutput(ctx, rdb, config)
 
 	log.Println("SlashVibeIssue service started")
 
@@ -428,19 +438,16 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 	}
 
 	// Create GitHub issue via Poppit
-	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, config)
+	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, submission.User.Username, config)
 	if err != nil {
 		log.Printf("Error creating GitHub issue: %v", err)
 		return
 	}
 
 	log.Printf("GitHub issue creation command sent to Poppit for repo: %s/%s", config.GitHubOrg, repo)
-
-	// Send confirmation message via SlackLiner
-	sendConfirmation(ctx, rdb, repo, title, submission.User.Username, config)
 }
 
-func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot bool, config Config) error {
+func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot bool, username string, config Config) error {
 	// Build the full repository name
 	repoFullName := fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
 
@@ -458,13 +465,18 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 		ghCmd = fmt.Sprintf("%s --assignee @copilot", ghCmd)
 	}
 
-	// Create Poppit command message
+	// Create Poppit command message with metadata
 	poppitCmd := PoppitCommand{
 		Repo:     repoFullName,
 		Branch:   "refs/heads/main",
 		Type:     "slash-vibe-issue",
 		Dir:      config.WorkingDir,
 		Commands: []string{ghCmd},
+		Metadata: map[string]interface{}{
+			"repo":     repo,
+			"title":    title,
+			"username": username,
+		},
 	}
 
 	payload, err := json.Marshal(poppitCmd)
@@ -481,9 +493,9 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 	return nil
 }
 
-func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username string, config Config) {
-	message := fmt.Sprintf("⏳ *GitHub Issue Creation Initiated by @%s*\n\n*Repository:* %s/%s\n*Title:* %s",
-		username, config.GitHubOrg, repo, title)
+func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, config Config) {
+	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s\n*URL:* %s",
+		username, config.GitHubOrg, repo, title, issueURL)
 
 	slackLinerMsg := SlackLinerMessage{
 		Channel: config.ConfirmationChannel,
@@ -503,5 +515,84 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 		return
 	}
 
-	log.Printf("Confirmation message sent to SlackLiner for issue in repo: %s/%s", config.GitHubOrg, repo)
+	log.Printf("Confirmation message sent to SlackLiner for issue: %s", issueURL)
+}
+
+func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, config Config) {
+	pubsub := rdb.Subscribe(ctx, config.RedisPoppitOutputChannel)
+	defer pubsub.Close()
+
+	log.Printf("Subscribed to Redis channel: %s", config.RedisPoppitOutputChannel)
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			handlePoppitOutput(ctx, rdb, msg.Payload, config)
+		}
+	}
+}
+
+func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, config Config) {
+	var output PoppitOutput
+	if err := json.Unmarshal([]byte(payload), &output); err != nil {
+		log.Printf("Error unmarshaling Poppit output: %v", err)
+		return
+	}
+
+	// Only handle slash-vibe-issue type
+	if output.Type != "slash-vibe-issue" {
+		return
+	}
+
+	log.Printf("Received Poppit output for slash-vibe-issue")
+
+	// Extract metadata
+	metadata := output.Metadata
+	if metadata == nil {
+		log.Printf("No metadata in Poppit output")
+		return
+	}
+
+	repo, _ := metadata["repo"].(string)
+	title, _ := metadata["title"].(string)
+	username, _ := metadata["username"].(string)
+
+	if repo == "" || title == "" || username == "" {
+		log.Printf("Missing required metadata: repo=%s, title=%s, username=%s", repo, title, username)
+		return
+	}
+
+	// Parse issue URL from output
+	issueURL := extractIssueURL(output.Output)
+	if issueURL == "" {
+		log.Printf("Failed to extract issue URL from output: %s", output.Output)
+		return
+	}
+
+	log.Printf("Extracted issue URL: %s", issueURL)
+
+	// Send confirmation message with issue URL
+	sendConfirmation(ctx, rdb, repo, title, username, issueURL, config)
+}
+
+func extractIssueURL(output string) string {
+	// Example output:
+	// Creating issue in its-the-vibe/SlashVibeIssue
+	//
+	// https://github.com/its-the-vibe/SlashVibeIssue/issues/13
+
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "https://github.com/") && strings.Contains(line, "/issues/") {
+			return line
+		}
+	}
+	return ""
 }

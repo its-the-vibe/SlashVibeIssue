@@ -74,3 +74,53 @@ func TestCreateIssueModalWithCustomTitle(t *testing.T) {
 		t.Errorf("Expected 5 blocks, got %d", len(modal.Blocks.BlockSet))
 	}
 }
+
+func TestExtractIssueURL(t *testing.T) {
+tests := []struct {
+name     string
+output   string
+expected string
+}{
+{
+name: "Valid output with issue URL",
+output: `Creating issue in its-the-vibe/SlashVibeIssue
+
+https://github.com/its-the-vibe/SlashVibeIssue/issues/13`,
+expected: "https://github.com/its-the-vibe/SlashVibeIssue/issues/13",
+},
+{
+name: "Output with extra whitespace",
+output: `Creating issue in its-the-vibe/SlashVibeIssue
+
+  https://github.com/its-the-vibe/SlashVibeIssue/issues/42  `,
+expected: "https://github.com/its-the-vibe/SlashVibeIssue/issues/42",
+},
+{
+name: "Multi-line output with URL in middle",
+output: `Creating issue in its-the-vibe/SlashVibeIssue
+Some other text
+https://github.com/its-the-vibe/TestRepo/issues/1
+More text`,
+expected: "https://github.com/its-the-vibe/TestRepo/issues/1",
+},
+{
+name:     "Output without issue URL",
+output:   "Creating issue in its-the-vibe/SlashVibeIssue\nSome error occurred",
+expected: "",
+},
+{
+name:     "Empty output",
+output:   "",
+expected: "",
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+result := extractIssueURL(tt.output)
+if result != tt.expected {
+t.Errorf("extractIssueURL() = %q, want %q", result, tt.expected)
+}
+})
+}
+}
