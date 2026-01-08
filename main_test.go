@@ -149,3 +149,41 @@ func TestCreateIssueModalWithProjectCheckbox(t *testing.T) {
 		t.Error("Expected block at index 4 to be an ActionBlock")
 	}
 }
+
+func TestExtractIssueNumber(t *testing.T) {
+	tests := []struct {
+		name     string
+		issueURL string
+		expected int
+	}{
+		{
+			name:     "Valid issue URL",
+			issueURL: "https://github.com/its-the-vibe/SlashVibeIssue/issues/42",
+			expected: 42,
+		},
+		{
+			name:     "Another valid issue URL",
+			issueURL: "https://github.com/org/repo/issues/123",
+			expected: 123,
+		},
+		{
+			name:     "Invalid URL",
+			issueURL: "https://github.com/org/repo",
+			expected: 0,
+		},
+		{
+			name:     "Empty URL",
+			issueURL: "",
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractIssueNumber(tt.issueURL)
+			if result != tt.expected {
+				t.Errorf("extractIssueNumber() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}

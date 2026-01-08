@@ -228,6 +228,7 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, 
 	repo, _ := metadata["repo"].(string)
 	title, _ := metadata["title"].(string)
 	username, _ := metadata["username"].(string)
+	assignedToCopilot, _ := metadata["assignedToCopilot"].(bool)
 
 	if repo == "" || title == "" || username == "" {
 		log.Printf("Missing required metadata: repo=%s, title=%s, username=%s", repo, title, username)
@@ -260,5 +261,133 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, 
 	}
 
 	// Send confirmation message with issue URL
-	sendConfirmation(ctx, rdb, repo, title, username, issueURL, config)
+	sendConfirmation(ctx, rdb, repo, title, username, issueURL, assignedToCopilot, config)
+}
+
+func subscribeToReactions(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
+	pubsub := rdb.Subscribe(ctx, config.RedisReactionChannel)
+	defer pubsub.Close()
+
+	log.Printf("Subscribed to Redis channel: %s", config.RedisReactionChannel)
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			handleReactionAdded(ctx, rdb, slackClient, msg.Payload, config)
+		}
+	}
+}
+
+func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
+	var reaction ReactionAddedEvent
+	if err := json.Unmarshal([]byte(payload), &reaction); err != nil {
+		log.Printf("Error unmarshaling reaction event: %v", err)
+		return
+	}
+
+	// Only handle reaction_added events
+	if reaction.Event.Type != "reaction_added" {
+		return
+	}
+
+	// Ignore reactions from bots
+	for _, auth := range reaction.Authorizations {
+		if auth.IsBot && auth.UserID == reaction.Event.User {
+			log.Printf("Ignoring reaction from bot user: %s", reaction.Event.User)
+			return
+		}
+	}
+
+	// Only handle sparkles emoji
+	if reaction.Event.Reaction != "sparkles" {
+		return
+	}
+
+	// Only handle message reactions
+	if reaction.Event.Item.Type != "message" {
+		return
+	}
+
+	log.Printf("Received sparkles reaction from user %s on message %s", reaction.Event.User, reaction.Event.Item.Ts)
+
+	// Fetch the message from Slack to get metadata
+	historyParams := &slack.GetConversationHistoryParameters{
+		ChannelID:          reaction.Event.Item.Channel,
+		Latest:             reaction.Event.Item.Ts,
+		Limit:              1,
+		Inclusive:          true,
+		IncludeAllMetadata: true,
+	}
+
+	history, err := slackClient.GetConversationHistory(historyParams)
+	if err != nil {
+		log.Printf("Error fetching message from Slack: %v", err)
+		return
+	}
+
+	if len(history.Messages) == 0 {
+		log.Printf("No message found for timestamp: %s", reaction.Event.Item.Ts)
+		return
+	}
+
+	message := history.Messages[0]
+
+	// Check if message has metadata
+	if message.Metadata.EventType == "" {
+		log.Printf("Message has no metadata, ignoring reaction")
+		return
+	}
+
+	// Parse metadata
+	var metadata MessageMetadata
+	metadata.EventType = message.Metadata.EventType
+
+	// Convert EventPayload to map
+	if payloadBytes, err := json.Marshal(message.Metadata.EventPayload); err == nil {
+		if err := json.Unmarshal(payloadBytes, &metadata.EventPayload); err != nil {
+			log.Printf("Error unmarshaling event payload: %v", err)
+			return
+		}
+	} else {
+		log.Printf("Error marshaling event payload: %v", err)
+		return
+	}
+
+	// Check if it's an issue_created event
+	if metadata.EventType != "issue_created" {
+		log.Printf("Event type is not issue_created: %s", metadata.EventType)
+		return
+	}
+
+	// Extract issue data from metadata
+	issueURL, _ := metadata.EventPayload["issue_url"].(string)
+	repository, _ := metadata.EventPayload["repository"].(string)
+	assignedToCopilot, _ := metadata.EventPayload["assignedToCopilot"].(bool)
+
+	if issueURL == "" {
+		log.Printf("Missing issue_url in metadata")
+		return
+	}
+
+	if assignedToCopilot {
+		log.Printf("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)
+		return
+	}
+
+	log.Printf("Assigning issue to Copilot: %s", issueURL)
+
+	// Assign issue to Copilot
+	err = assignIssueToCopilot(ctx, rdb, issueURL, repository, config)
+	if err != nil {
+		log.Printf("Error assigning issue to Copilot: %v", err)
+		return
+	}
+
+	log.Printf("Successfully assigned issue to Copilot: %s", issueURL)
 }

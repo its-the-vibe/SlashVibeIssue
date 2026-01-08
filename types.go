@@ -25,9 +25,10 @@ type ViewSubmission struct {
 }
 
 type SlackLinerMessage struct {
-	Channel string `json:"channel"`
-	Text    string `json:"text"`
-	TTL     int    `json:"ttl"`
+	Channel  string                 `json:"channel"`
+	Text     string                 `json:"text"`
+	TTL      int                    `json:"ttl"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type PoppitCommand struct {
@@ -44,4 +45,31 @@ type PoppitOutput struct {
 	Type     string                 `json:"type"`
 	Command  string                 `json:"command"`
 	Output   string                 `json:"output"`
+}
+
+type ReactionAddedEvent struct {
+	Token   string `json:"token"`
+	Type    string `json:"type"`
+	EventID string `json:"event_id"`
+	Event   struct {
+		Type     string `json:"type"`
+		User     string `json:"user"`
+		Reaction string `json:"reaction"`
+		Item     struct {
+			Type    string `json:"type"`
+			Channel string `json:"channel"`
+			Ts      string `json:"ts"`
+		} `json:"item"`
+		ItemUser string `json:"item_user"`
+		EventTs  string `json:"event_ts"`
+	} `json:"event"`
+	Authorizations []struct {
+		UserID string `json:"user_id"`
+		IsBot  bool   `json:"is_bot"`
+	} `json:"authorizations"`
+}
+
+type MessageMetadata struct {
+	EventType    string                 `json:"event_type"`
+	EventPayload map[string]interface{} `json:"event_payload"`
 }

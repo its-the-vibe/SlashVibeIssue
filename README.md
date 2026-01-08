@@ -10,6 +10,7 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 
 - 🎯 Interactive Slack modal for creating GitHub issues
 - 🔄 Redis pub/sub for receiving Slack commands and view submissions
+- ✨ Emoji reaction support to assign issues to Copilot after creation
 - 🐙 Poppit integration for executing GitHub CLI commands
 - ✅ Automatic confirmation messages via SlackLiner
 - 🐳 Docker containerization with scratch runtime
@@ -17,10 +18,11 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 
 ## Architecture
 
-The service subscribes to three Redis channels:
+The service subscribes to four Redis channels:
 1. **Slash commands channel** (default: `slack-commands`) - Receives `/issue` commands
 2. **View submission channel** (default: `slack-relay-view-submission`) - Receives modal submissions
 3. **Poppit output channel** (default: `poppit:command-output`) - Receives command execution output from Poppit
+4. **Reaction added channel** (default: `slack-relay-reaction-added`) - Receives emoji reaction events
 
 When a modal is submitted, the service:
 1. Extracts repository, title, description, and assignment preference
@@ -39,6 +41,7 @@ Environment variables:
 | `REDIS_PASSWORD` | _(empty)_ | Redis password |
 | `REDIS_CHANNEL` | `slack-commands` | Channel for slash commands |
 | `REDIS_VIEW_SUBMISSION_CHANNEL` | `slack-relay-view-submission` | Channel for view submissions |
+| `REDIS_REACTION_CHANNEL` | `slack-relay-reaction-added` | Channel for emoji reaction events |
 | `REDIS_SLACKLINER_LIST` | `slackliner:notifications` | Redis list for SlackLiner messages |
 | `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
 | `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:command-output` | Redis channel for Poppit command output |
@@ -94,6 +97,8 @@ docker-compose up
 
 ## Usage
 
+### Creating an Issue
+
 1. In Slack, type `/issue`
 2. Fill in the modal:
    - Select a repository (external select - requires integration)
@@ -103,6 +108,19 @@ docker-compose up
    - "Add to project" checkbox is checked by default
 3. Click "Create Issue"
 4. Confirmation message appears in #gh-issues channel
+
+### Assigning Issue to Copilot via Emoji Reaction
+
+After an issue is created, you can assign it to Copilot by reacting to the confirmation message with the ✨ (`:sparkles:`) emoji:
+
+1. React with ✨ to any issue confirmation message
+2. The service will automatically assign the issue to @copilot (if not already assigned)
+3. Only works if:
+   - The issue was not already assigned to Copilot during creation
+   - The reaction is from a human user (not a bot)
+   - The confirmation message has valid metadata
+
+Note: The confirmation messages include metadata about the issue (URL, repository, assignment status) to support this feature.
 
 ## Integration Points
 

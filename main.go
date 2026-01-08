@@ -46,6 +46,7 @@ func main() {
 	go subscribeToSlashCommands(ctx, rdb, slackClient, config)
 	go subscribeToViewSubmissions(ctx, rdb, slackClient, config)
 	go subscribeToPoppitOutput(ctx, rdb, config)
+	go subscribeToReactions(ctx, rdb, slackClient, config)
 
 	log.Println("SlashVibeIssue service started")
 
