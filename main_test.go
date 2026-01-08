@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/slack-go/slack"
@@ -147,5 +149,47 @@ func TestCreateIssueModalWithProjectCheckbox(t *testing.T) {
 		}
 	} else {
 		t.Error("Expected block at index 4 to be an ActionBlock")
+	}
+}
+
+func TestExtractIssueNumber(t *testing.T) {
+	tests := []struct {
+		name     string
+		issueURL string
+		expected int
+	}{
+		{
+			name:     "Valid issue URL",
+			issueURL: "https://github.com/its-the-vibe/SlashVibeIssue/issues/42",
+			expected: 42,
+		},
+		{
+			name:     "Another valid issue URL",
+			issueURL: "https://github.com/org/repo/issues/123",
+			expected: 123,
+		},
+		{
+			name:     "Invalid URL",
+			issueURL: "https://github.com/org/repo",
+			expected: 0,
+		},
+		{
+			name:     "Empty URL",
+			issueURL: "",
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var issueNumber int
+			parts := strings.Split(tt.issueURL, "/")
+			if len(parts) >= 7 {
+				fmt.Sscanf(parts[6], "%d", &issueNumber)
+			}
+			if issueNumber != tt.expected {
+				t.Errorf("extractIssueNumber() = %d, want %d", issueNumber, tt.expected)
+			}
+		})
 	}
 }

@@ -36,10 +36,11 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 		Dir:      config.WorkingDir,
 		Commands: []string{ghCmd},
 		Metadata: map[string]interface{}{
-			"repo":         repo,
-			"title":        title,
-			"username":     username,
-			"addToProject": addToProject,
+			"repo":              repo,
+			"title":             title,
+			"username":          username,
+			"addToProject":      addToProject,
+			"assignedToCopilot": assignToCopilot,
 		},
 	}
 
@@ -118,14 +119,36 @@ func extractIssueURL(output string) string {
 	return ""
 }
 
-func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, config Config) {
+func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, assignedToCopilot bool, config Config) {
 	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s\n*URL:* %s",
 		username, config.GitHubOrg, repo, title, issueURL)
 
+	// Extract issue number from URL
+	// URL format: https://github.com/org/repo/issues/123
+	var issueNumber int
+	parts := strings.Split(issueURL, "/")
+	if len(parts) >= 7 {
+		fmt.Sscanf(parts[6], "%d", &issueNumber)
+	}
+
+	// Build metadata
+	metadata := map[string]interface{}{
+		"event_type": "issue_created",
+		"event_payload": map[string]interface{}{
+			"username":          username,
+			"title":             title,
+			"issue_number":      issueNumber,
+			"issue_url":         issueURL,
+			"repository":        fmt.Sprintf("%s/%s", config.GitHubOrg, repo),
+			"assignedToCopilot": assignedToCopilot,
+		},
+	}
+
 	slackLinerMsg := SlackLinerMessage{
-		Channel: config.ConfirmationChannel,
-		Text:    message,
-		TTL:     config.ConfirmationTTL,
+		Channel:  config.ConfirmationChannel,
+		Text:     message,
+		TTL:      config.ConfirmationTTL,
+		Metadata: metadata,
 	}
 
 	payload, err := json.Marshal(slackLinerMsg)
@@ -141,4 +164,35 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 	}
 
 	log.Printf("Confirmation message sent to SlackLiner for issue: %s", issueURL)
+}
+
+func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+	// Build the gh command to assign issue to copilot
+	ghCmd := fmt.Sprintf("gh issue edit --add-assignee=\"@copilot\" %s", issueURL)
+
+	// Create Poppit command message
+	poppitCmd := PoppitCommand{
+		Repo:     repo,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-assign-copilot",
+		Dir:      config.WorkingDir,
+		Commands: []string{ghCmd},
+		Metadata: map[string]interface{}{
+			"issueURL": issueURL,
+		},
+	}
+
+	payload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
+	}
+
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	log.Printf("Copilot assignment command sent to Poppit for issue: %s", issueURL)
+	return nil
 }

@@ -12,6 +12,7 @@ type Config struct {
 	RedisPassword              string
 	RedisChannel               string
 	RedisViewSubmissionChannel string
+	RedisReactionChannel       string
 	RedisSlackLinerList        string
 	RedisPoppitList            string
 	RedisPoppitOutputChannel   string
@@ -30,6 +31,7 @@ func loadConfig() Config {
 		RedisPassword:              getEnv("REDIS_PASSWORD", ""),
 		RedisChannel:               getEnv("REDIS_CHANNEL", "slack-commands"),
 		RedisViewSubmissionChannel: getEnv("REDIS_VIEW_SUBMISSION_CHANNEL", "slack-relay-view-submission"),
+		RedisReactionChannel:       getEnv("REDIS_REACTION_CHANNEL", "slack-relay-reaction-added"),
 		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
 		RedisPoppitOutputChannel:   getEnv("REDIS_POPPIT_OUTPUT_CHANNEL", "poppit:command-output"),
