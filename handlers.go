@@ -350,7 +350,13 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 
 	// Convert EventPayload to map
 	if payloadBytes, err := json.Marshal(message.Metadata.EventPayload); err == nil {
-		json.Unmarshal(payloadBytes, &metadata.EventPayload)
+		if err := json.Unmarshal(payloadBytes, &metadata.EventPayload); err != nil {
+			log.Printf("Error unmarshaling event payload: %v", err)
+			return
+		}
+	} else {
+		log.Printf("Error marshaling event payload: %v", err)
+		return
 	}
 
 	// Check if it's an issue_created event

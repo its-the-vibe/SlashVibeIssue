@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/slack-go/slack"
@@ -182,13 +180,9 @@ func TestExtractIssueNumber(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var issueNumber int
-			parts := strings.Split(tt.issueURL, "/")
-			if len(parts) >= 7 {
-				fmt.Sscanf(parts[6], "%d", &issueNumber)
-			}
-			if issueNumber != tt.expected {
-				t.Errorf("extractIssueNumber() = %d, want %d", issueNumber, tt.expected)
+			result := extractIssueNumber(tt.issueURL)
+			if result != tt.expected {
+				t.Errorf("extractIssueNumber() = %d, want %d", result, tt.expected)
 			}
 		})
 	}

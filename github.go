@@ -119,17 +119,22 @@ func extractIssueURL(output string) string {
 	return ""
 }
 
-func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, assignedToCopilot bool, config Config) {
-	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s\n*URL:* %s",
-		username, config.GitHubOrg, repo, title, issueURL)
-
-	// Extract issue number from URL
+func extractIssueNumber(issueURL string) int {
 	// URL format: https://github.com/org/repo/issues/123
 	var issueNumber int
 	parts := strings.Split(issueURL, "/")
 	if len(parts) >= 7 {
 		fmt.Sscanf(parts[6], "%d", &issueNumber)
 	}
+	return issueNumber
+}
+
+func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, assignedToCopilot bool, config Config) {
+	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s\n*URL:* %s",
+		username, config.GitHubOrg, repo, title, issueURL)
+
+	// Extract issue number from URL
+	issueNumber := extractIssueNumber(issueURL)
 
 	// Build metadata
 	metadata := map[string]interface{}{
