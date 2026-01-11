@@ -15,7 +15,7 @@ services:
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - GITHUB_ORG=${GITHUB_ORG}
       - WORKING_DIR=${WORKING_DIR:-/tmp}
-      - CONFIRMATION_CHANNEL=${CONFIRMATION_CHANNEL:-#gh-issues}
+      - CONFIRMATION_CHANNEL_ID=${CONFIRMATION_CHANNEL_ID:-}
       - CONFIRMATION_TTL=${CONFIRMATION_TTL:-240h}
     restart: unless-stopped
     extra_hosts:
