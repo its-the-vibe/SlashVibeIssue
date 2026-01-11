@@ -73,3 +73,25 @@ type MessageMetadata struct {
 	EventType    string                 `json:"event_type"`
 	EventPayload map[string]interface{} `json:"event_payload"`
 }
+
+type GitHubWebhookEvent struct {
+	Action string `json:"action"`
+	Issue  struct {
+		URL           string `json:"url"`
+		RepositoryURL string `json:"repository_url"`
+		Number        int    `json:"number"`
+		Title         string `json:"title"`
+	} `json:"issue"`
+}
+
+type SlackReaction struct {
+	Reaction string `json:"reaction"`
+	Channel  string `json:"channel"`
+	Ts       string `json:"ts"`
+}
+
+type TimeBombMessage struct {
+	Channel string `json:"channel"`
+	Ts      string `json:"ts"`
+	TTL     int    `json:"ttl"`
+}

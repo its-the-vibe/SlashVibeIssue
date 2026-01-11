@@ -16,11 +16,15 @@ type Config struct {
 	RedisSlackLinerList        string
 	RedisPoppitList            string
 	RedisPoppitOutputChannel   string
+	RedisGitHubWebhookChannel  string
+	RedisSlackReactionsList    string
+	RedisTimeBombChannel       string
 	SlackBotToken              string
 	GitHubOrg                  string
 	WorkingDir                 string
-	ConfirmationChannel        string
+	ConfirmationChannelID      string
 	ConfirmationTTL            int
+	ConfirmationSearchLimit    int
 	ProjectID                  string
 	ProjectOrg                 string
 }
@@ -35,11 +39,15 @@ func loadConfig() Config {
 		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
 		RedisPoppitOutputChannel:   getEnv("REDIS_POPPIT_OUTPUT_CHANNEL", "poppit:command-output"),
+		RedisGitHubWebhookChannel:  getEnv("REDIS_GITHUB_WEBHOOK_CHANNEL", "github-webhook-issues"),
+		RedisSlackReactionsList:    getEnv("REDIS_SLACK_REACTIONS_LIST", "slack_reactions"),
+		RedisTimeBombChannel:       getEnv("REDIS_TIMEBOMB_CHANNEL", "timebomb-messages"),
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
-		ConfirmationChannel:        getEnv("CONFIRMATION_CHANNEL", "#gh-issues"),
+		ConfirmationChannelID:      getEnv("CONFIRMATION_CHANNEL_ID", ""),
 		ConfirmationTTL:            getEnvAsIntSeconds("CONFIRMATION_TTL", "48h"),
+		ConfirmationSearchLimit:    getEnvAsInt("CONFIRMATION_SEARCH_LIMIT", "100"),
 		ProjectID:                  getEnv("PROJECT_ID", "1"),
 		ProjectOrg:                 getEnv("PROJECT_ORG", "its-the-vibe"),
 	}
@@ -57,6 +65,23 @@ func getEnvAsIntSeconds(key, defaultValue string) int {
 		return int(d.Seconds())
 	}
 	log.Printf("Unable to parse %s=%q as int seconds or duration; defaulting to 0", key, val)
+	return 0
+}
+
+func getEnvAsInt(key, defaultValue string) int {
+	val := os.Getenv(key)
+	if val == "" {
+		val = defaultValue
+	}
+	if i, err := strconv.Atoi(val); err == nil {
+		return i
+	}
+	// If parsing fails, try to parse the default value
+	if i, err := strconv.Atoi(defaultValue); err == nil {
+		log.Printf("Unable to parse %s=%q as int; using default %d", key, val, i)
+		return i
+	}
+	log.Printf("Unable to parse %s=%q as int; defaulting to 0", key, val)
 	return 0
 }
 

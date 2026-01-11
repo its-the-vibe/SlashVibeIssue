@@ -3,11 +3,18 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/slack-go/slack"
+)
+
+const (
+	issueClosedReactionEmoji = "cat2"
+	issueClosedTTLSeconds    = 86400 // 24 hours
+	issueCreatedEventType    = "issue_created"
 )
 
 func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
@@ -360,7 +367,7 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 	}
 
 	// Check if it's an issue_created event
-	if metadata.EventType != "issue_created" {
+	if metadata.EventType != issueCreatedEventType {
 		log.Printf("Event type is not issue_created: %s", metadata.EventType)
 		return
 	}
@@ -390,4 +397,171 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 	}
 
 	log.Printf("Successfully assigned issue to Copilot: %s", issueURL)
+}
+
+func subscribeToGitHubWebhooks(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
+	pubsub := rdb.Subscribe(ctx, config.RedisGitHubWebhookChannel)
+	defer pubsub.Close()
+
+	log.Printf("Subscribed to Redis channel: %s", config.RedisGitHubWebhookChannel)
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			handleGitHubIssueEvent(ctx, rdb, slackClient, msg.Payload, config)
+		}
+	}
+}
+
+func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
+	var event GitHubWebhookEvent
+	if err := json.Unmarshal([]byte(payload), &event); err != nil {
+		log.Printf("Error unmarshaling GitHub webhook event: %v", err)
+		return
+	}
+
+	// Only handle issue closed events
+	if event.Action != "closed" {
+		return
+	}
+
+	log.Printf("Received issue closed event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
+
+	// Transform API URL to web URL
+	// From: https://api.github.com/repos/its-the-vibe/SlashVibeIssue/issues/13
+	// To: https://github.com/its-the-vibe/SlashVibeIssue/issues/13
+	issueURL := transformAPIURLToWebURL(event.Issue.URL)
+	if issueURL == "" {
+		log.Printf("Failed to transform API URL to web URL: %s", event.Issue.URL)
+		return
+	}
+
+	log.Printf("Transformed issue URL: %s", issueURL)
+
+	// Search for the message with matching metadata
+	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
+	if err != nil {
+		log.Printf("Error finding message by issue URL: %v", err)
+		return
+	}
+
+	if channelID == "" || messageTs == "" {
+		log.Printf("No message found for issue URL: %s", issueURL)
+		return
+	}
+
+	log.Printf("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
+
+	// Send reaction to SlackLiner
+	err = sendReactionToSlackLiner(ctx, rdb, issueClosedReactionEmoji, channelID, messageTs, config)
+	if err != nil {
+		log.Printf("Error sending reaction: %v", err)
+		return
+	}
+
+	log.Printf("Sent %s reaction for message ts=%s", issueClosedReactionEmoji, messageTs)
+
+	// Set TTL to 24 hours
+	err = sendTTLToTimeBomb(ctx, rdb, channelID, messageTs, issueClosedTTLSeconds, config)
+	if err != nil {
+		log.Printf("Error setting TTL: %v", err)
+		return
+	}
+
+	log.Printf("Set TTL to 24 hours for message ts=%s", messageTs)
+}
+
+func transformAPIURLToWebURL(apiURL string) string {
+	// Transform from: https://api.github.com/repos/its-the-vibe/SlashVibeIssue/issues/13
+	// To: https://github.com/its-the-vibe/SlashVibeIssue/issues/13
+	if !strings.HasPrefix(apiURL, "https://api.github.com/repos/") {
+		return ""
+	}
+
+	// Remove the "https://api.github.com/repos/" prefix
+	path := strings.TrimPrefix(apiURL, "https://api.github.com/repos/")
+	
+	// Build the web URL
+	return "https://github.com/" + path
+}
+
+func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issueURL string, config Config) (string, string, error) {
+	// Use the channel ID directly from config
+	if config.ConfirmationChannelID == "" {
+		return "", "", fmt.Errorf("confirmation channel ID not configured")
+	}
+
+	// Search through recent messages in the confirmation channel
+	// Only search the most recent messages up to the configured limit
+	historyParams := &slack.GetConversationHistoryParameters{
+		ChannelID:          config.ConfirmationChannelID,
+		Limit:              config.ConfirmationSearchLimit,
+		IncludeAllMetadata: true,
+	}
+
+	history, err := slackClient.GetConversationHistory(historyParams)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get conversation history: %v", err)
+	}
+
+	// Search through messages for matching metadata
+	for _, message := range history.Messages {
+		if message.Metadata.EventType == issueCreatedEventType {
+			// Check for matching issue URL directly from EventPayload
+			if msgIssueURL, ok := message.Metadata.EventPayload["issue_url"].(string); ok {
+				if msgIssueURL == issueURL {
+					return config.ConfirmationChannelID, message.Timestamp, nil
+				}
+			}
+		}
+	}
+
+	// Message not found in the recent messages
+	return "", "", nil
+}
+
+func sendReactionToSlackLiner(ctx context.Context, rdb *redis.Client, reaction, channel, ts string, config Config) error {
+	slackReaction := SlackReaction{
+		Reaction: reaction,
+		Channel:  channel,
+		Ts:       ts,
+	}
+
+	payload, err := json.Marshal(slackReaction)
+	if err != nil {
+		return fmt.Errorf("failed to marshal slack reaction: %v", err)
+	}
+
+	err = rdb.RPush(ctx, config.RedisSlackReactionsList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push reaction to Redis list: %v", err)
+	}
+
+	return nil
+}
+
+func sendTTLToTimeBomb(ctx context.Context, rdb *redis.Client, channel, ts string, ttl int, config Config) error {
+	timeBombMsg := TimeBombMessage{
+		Channel: channel,
+		Ts:      ts,
+		TTL:     ttl,
+	}
+
+	payload, err := json.Marshal(timeBombMsg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal timebomb message: %v", err)
+	}
+
+	err = rdb.Publish(ctx, config.RedisTimeBombChannel, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to publish to timebomb channel: %v", err)
+	}
+
+	return nil
 }
