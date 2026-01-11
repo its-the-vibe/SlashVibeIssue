@@ -22,8 +22,9 @@ type Config struct {
 	SlackBotToken              string
 	GitHubOrg                  string
 	WorkingDir                 string
-	ConfirmationChannel        string
+	ConfirmationChannelID      string
 	ConfirmationTTL            int
+	ConfirmationSearchLimit    int
 	ProjectID                  string
 	ProjectOrg                 string
 }
@@ -44,8 +45,9 @@ func loadConfig() Config {
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
-		ConfirmationChannel:        getEnv("CONFIRMATION_CHANNEL", "#gh-issues"),
+		ConfirmationChannelID:      getEnv("CONFIRMATION_CHANNEL_ID", ""),
 		ConfirmationTTL:            getEnvAsIntSeconds("CONFIRMATION_TTL", "48h"),
+		ConfirmationSearchLimit:    getEnvAsInt("CONFIRMATION_SEARCH_LIMIT", "100"),
 		ProjectID:                  getEnv("PROJECT_ID", "1"),
 		ProjectOrg:                 getEnv("PROJECT_ORG", "its-the-vibe"),
 	}
@@ -63,6 +65,18 @@ func getEnvAsIntSeconds(key, defaultValue string) int {
 		return int(d.Seconds())
 	}
 	log.Printf("Unable to parse %s=%q as int seconds or duration; defaulting to 0", key, val)
+	return 0
+}
+
+func getEnvAsInt(key, defaultValue string) int {
+	val := os.Getenv(key)
+	if val == "" {
+		val = defaultValue
+	}
+	if i, err := strconv.Atoi(val); err == nil {
+		return i
+	}
+	log.Printf("Unable to parse %s=%q as int; defaulting to 0", key, val)
 	return 0
 }
 

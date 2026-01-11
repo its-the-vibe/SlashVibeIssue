@@ -36,7 +36,7 @@ When a modal is submitted, the service:
 
 When a GitHub issue closed event is received, the service:
 1. Transforms the API URL to a web URL (e.g., from `https://api.github.com/repos/org/repo/issues/13` to `https://github.com/org/repo/issues/13`)
-2. Searches the confirmation channel for messages with metadata matching the issue URL
+2. Searches the most recent messages in the confirmation channel (up to the configured limit) for messages with metadata matching the issue URL
 3. Sends a :cat2: emoji reaction to the message via SlackLiner
 4. Sets the message TTL to 24 hours via TimeBomb
 
@@ -60,8 +60,9 @@ Environment variables:
 | `SLACK_BOT_TOKEN` | _(required)_ | Slack bot token |
 | `GITHUB_ORG` | _(required)_ | GitHub organization name |
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |
-| `CONFIRMATION_CHANNEL` | `gh-issues` | Slack channel for confirmations |
+| `CONFIRMATION_CHANNEL_ID` | _(required)_ | Slack channel ID for confirmation messages |
 | `CONFIRMATION_TTL` | `48h` | TTL for confirmation messages |
+| `CONFIRMATION_SEARCH_LIMIT` | `100` | Maximum number of recent messages to search for matching issue |
 | `PROJECT_ID` | `1` | GitHub project ID for automatic issue assignment |
 | `PROJECT_ORG` | `its-the-vibe` | GitHub organization for project assignment |
 
@@ -119,7 +120,7 @@ docker-compose up
    - Optionally check "Assign to Copilot"
    - "Add to project" checkbox is checked by default
 3. Click "Create Issue"
-4. Confirmation message appears in #gh-issues channel
+4. Confirmation message appears in the configured confirmation channel
 
 ### Assigning Issue to Copilot via Emoji Reaction
 

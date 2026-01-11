@@ -492,62 +492,37 @@ func transformAPIURLToWebURL(apiURL string) string {
 }
 
 func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issueURL string, config Config) (string, string, error) {
-	// Get the channel ID from the channel name
-	channels, _, err := slackClient.GetConversationsForUser(&slack.GetConversationsForUserParameters{
-		Limit: 1000,
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get user conversations: %v", err)
-	}
-
-	var channelID string
-	for _, channel := range channels {
-		if channel.Name == strings.TrimPrefix(config.ConfirmationChannel, "#") ||
-		   "#"+channel.Name == config.ConfirmationChannel {
-			channelID = channel.ID
-			break
-		}
-	}
-
-	if channelID == "" {
-		return "", "", fmt.Errorf("channel not found: %s", config.ConfirmationChannel)
+	// Use the channel ID directly from config
+	if config.ConfirmationChannelID == "" {
+		return "", "", fmt.Errorf("confirmation channel ID not configured")
 	}
 
 	// Search through recent messages in the confirmation channel
-	// We paginate through messages 100 at a time until we find a match or run out of messages
+	// Only search the most recent messages up to the configured limit
 	historyParams := &slack.GetConversationHistoryParameters{
-		ChannelID:          channelID,
-		Limit:              100,
+		ChannelID:          config.ConfirmationChannelID,
+		Limit:              config.ConfirmationSearchLimit,
 		IncludeAllMetadata: true,
 	}
 
-	for {
-		history, err := slackClient.GetConversationHistory(historyParams)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to get conversation history: %v", err)
-		}
+	history, err := slackClient.GetConversationHistory(historyParams)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get conversation history: %v", err)
+	}
 
-		// Search through messages for matching metadata
-		for _, message := range history.Messages {
-			if message.Metadata.EventType == issueCreatedEventType {
-				// Check for matching issue URL directly from EventPayload
-				if msgIssueURL, ok := message.Metadata.EventPayload["issue_url"].(string); ok {
-					if msgIssueURL == issueURL {
-						return channelID, message.Timestamp, nil
-					}
+	// Search through messages for matching metadata
+	for _, message := range history.Messages {
+		if message.Metadata.EventType == issueCreatedEventType {
+			// Check for matching issue URL directly from EventPayload
+			if msgIssueURL, ok := message.Metadata.EventPayload["issue_url"].(string); ok {
+				if msgIssueURL == issueURL {
+					return config.ConfirmationChannelID, message.Timestamp, nil
 				}
 			}
 		}
-
-		// If there are no more messages, break
-		if !history.HasMore {
-			break
-		}
-
-		// Continue with next page
-		historyParams.Cursor = history.ResponseMetaData.NextCursor
 	}
 
+	// Message not found in the recent messages
 	return "", "", nil
 }
 
