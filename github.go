@@ -138,7 +138,7 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 
 	// Build metadata
 	metadata := map[string]interface{}{
-		"event_type": "issue_created",
+		"event_type": issueCreatedEventType,
 		"event_payload": map[string]interface{}{
 			"username":          username,
 			"title":             title,

@@ -11,6 +11,12 @@ import (
 	"github.com/slack-go/slack"
 )
 
+const (
+	issueClosedReactionEmoji = "cat2"
+	issueClosedTTLSeconds    = 86400 // 24 hours
+	issueCreatedEventType    = "issue_created"
+)
+
 func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
 	pubsub := rdb.Subscribe(ctx, config.RedisChannel)
 	defer pubsub.Close()
@@ -361,7 +367,7 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 	}
 
 	// Check if it's an issue_created event
-	if metadata.EventType != "issue_created" {
+	if metadata.EventType != issueCreatedEventType {
 		log.Printf("Event type is not issue_created: %s", metadata.EventType)
 		return
 	}
@@ -453,16 +459,16 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 	log.Printf("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
 
 	// Send reaction to SlackLiner
-	err = sendReactionToSlackLiner(ctx, rdb, "cat2", channelID, messageTs, config)
+	err = sendReactionToSlackLiner(ctx, rdb, issueClosedReactionEmoji, channelID, messageTs, config)
 	if err != nil {
 		log.Printf("Error sending reaction: %v", err)
 		return
 	}
 
-	log.Printf("Sent cat2 reaction for message ts=%s", messageTs)
+	log.Printf("Sent %s reaction for message ts=%s", issueClosedReactionEmoji, messageTs)
 
-	// Set TTL to 24 hours (86400 seconds)
-	err = sendTTLToTimeBomb(ctx, rdb, channelID, messageTs, 86400, config)
+	// Set TTL to 24 hours
+	err = sendTTLToTimeBomb(ctx, rdb, channelID, messageTs, issueClosedTTLSeconds, config)
 	if err != nil {
 		log.Printf("Error setting TTL: %v", err)
 		return
@@ -496,7 +502,7 @@ func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issue
 
 	var channelID string
 	for _, channel := range channels {
-		if channel.Name == strings.TrimPrefix(config.ConfirmationChannel, "#") || 
+		if channel.Name == strings.TrimPrefix(config.ConfirmationChannel, "#") ||
 		   "#"+channel.Name == config.ConfirmationChannel {
 			channelID = channel.ID
 			break
@@ -523,7 +529,7 @@ func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issue
 
 		// Search through messages for matching metadata
 		for _, message := range history.Messages {
-			if message.Metadata.EventType == "issue_created" {
+			if message.Metadata.EventType == issueCreatedEventType {
 				// Parse metadata to check for matching issue URL
 				if payloadBytes, err := json.Marshal(message.Metadata.EventPayload); err == nil {
 					var metadata MessageMetadata
