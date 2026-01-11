@@ -13,16 +13,19 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 - ✨ Emoji reaction support to assign issues to Copilot after creation
 - 🐙 Poppit integration for executing GitHub CLI commands
 - ✅ Automatic confirmation messages via SlackLiner
+- 🐱 Auto-react to issue messages when issues are closed with :cat2: emoji
+- ⏱️ Automatic TTL updates for closed issue messages (24 hours)
 - 🐳 Docker containerization with scratch runtime
 - ⚙️ Configuration via environment variables
 
 ## Architecture
 
-The service subscribes to four Redis channels:
+The service subscribes to five Redis channels:
 1. **Slash commands channel** (default: `slack-commands`) - Receives `/issue` commands
 2. **View submission channel** (default: `slack-relay-view-submission`) - Receives modal submissions
 3. **Poppit output channel** (default: `poppit:command-output`) - Receives command execution output from Poppit
 4. **Reaction added channel** (default: `slack-relay-reaction-added`) - Receives emoji reaction events
+5. **GitHub webhook channel** (default: `github-webhook-issues`) - Receives GitHub issue webhook events
 
 When a modal is submitted, the service:
 1. Extracts repository, title, description, and assignment preference
@@ -30,6 +33,12 @@ When a modal is submitted, the service:
 3. Waits for Poppit to execute the command and publish the output
 4. Parses the issue URL from the command output
 5. Publishes a confirmation message to the SlackLiner list with the issue URL for delivery to Slack
+
+When a GitHub issue closed event is received, the service:
+1. Transforms the API URL to a web URL (e.g., from `https://api.github.com/repos/org/repo/issues/13` to `https://github.com/org/repo/issues/13`)
+2. Searches the confirmation channel for messages with metadata matching the issue URL
+3. Sends a :cat2: emoji reaction to the message via SlackLiner
+4. Sets the message TTL to 24 hours via TimeBomb
 
 ## Configuration
 
@@ -45,6 +54,9 @@ Environment variables:
 | `REDIS_SLACKLINER_LIST` | `slackliner:notifications` | Redis list for SlackLiner messages |
 | `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
 | `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:command-output` | Redis channel for Poppit command output |
+| `REDIS_GITHUB_WEBHOOK_CHANNEL` | `github-webhook-issues` | Redis channel for GitHub webhook events |
+| `REDIS_SLACK_REACTIONS_LIST` | `slack_reactions` | Redis list for SlackLiner reactions |
+| `REDIS_TIMEBOMB_CHANNEL` | `timebomb-messages` | Redis channel for TimeBomb TTL updates |
 | `SLACK_BOT_TOKEN` | _(required)_ | Slack bot token |
 | `GITHUB_ORG` | _(required)_ | GitHub organization name |
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |
@@ -122,10 +134,23 @@ After an issue is created, you can assign it to Copilot by reacting to the confi
 
 Note: The confirmation messages include metadata about the issue (URL, repository, assignment status) to support this feature.
 
+### Automatic Issue Close Handling
+
+When a GitHub issue is closed, the service automatically:
+
+1. Receives the issue closed webhook event via the `github-webhook-issues` Redis channel
+2. Transforms the API URL to a web URL format
+3. Searches the confirmation channel for the message with matching issue URL metadata
+4. Adds a 🐱 (`:cat2:`) emoji reaction to the message via SlackLiner
+5. Updates the message TTL to 24 hours via TimeBomb
+
+This provides visual feedback in Slack when issues are completed and ensures closed issue messages are cleaned up after a day.
+
 ## Integration Points
 
 - **Poppit**: For executing GitHub CLI commands asynchronously
-- **SlackLiner**: For sending timed confirmation messages to Slack
+- **SlackLiner**: For sending timed confirmation messages and emoji reactions to Slack
+- **TimeBomb**: For managing message TTLs in Slack
 
 ## Modal Structure
 
