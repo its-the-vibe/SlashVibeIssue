@@ -187,3 +187,46 @@ func TestExtractIssueNumber(t *testing.T) {
 		})
 	}
 }
+
+func TestTransformAPIURLToWebURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		apiURL   string
+		expected string
+	}{
+		{
+			name:     "Valid API URL",
+			apiURL:   "https://api.github.com/repos/its-the-vibe/SlashVibeIssue/issues/13",
+			expected: "https://github.com/its-the-vibe/SlashVibeIssue/issues/13",
+		},
+		{
+			name:     "Another valid API URL",
+			apiURL:   "https://api.github.com/repos/org/repo/issues/42",
+			expected: "https://github.com/org/repo/issues/42",
+		},
+		{
+			name:     "Invalid URL - not API URL",
+			apiURL:   "https://github.com/org/repo/issues/42",
+			expected: "",
+		},
+		{
+			name:     "Invalid URL - wrong prefix",
+			apiURL:   "https://example.com/repos/org/repo/issues/42",
+			expected: "",
+		},
+		{
+			name:     "Empty URL",
+			apiURL:   "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := transformAPIURLToWebURL(tt.apiURL)
+			if result != tt.expected {
+				t.Errorf("transformAPIURLToWebURL() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}

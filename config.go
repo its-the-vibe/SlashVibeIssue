@@ -16,6 +16,9 @@ type Config struct {
 	RedisSlackLinerList        string
 	RedisPoppitList            string
 	RedisPoppitOutputChannel   string
+	RedisGitHubWebhookChannel  string
+	RedisSlackReactionsList    string
+	RedisTimeBombChannel       string
 	SlackBotToken              string
 	GitHubOrg                  string
 	WorkingDir                 string
@@ -35,6 +38,9 @@ func loadConfig() Config {
 		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
 		RedisPoppitOutputChannel:   getEnv("REDIS_POPPIT_OUTPUT_CHANNEL", "poppit:command-output"),
+		RedisGitHubWebhookChannel:  getEnv("REDIS_GITHUB_WEBHOOK_CHANNEL", "github-webhook-issues"),
+		RedisSlackReactionsList:    getEnv("REDIS_SLACK_REACTIONS_LIST", "slack_reactions"),
+		RedisTimeBombChannel:       getEnv("REDIS_TIMEBOMB_CHANNEL", "timebomb-messages"),
 		SlackBotToken:              getEnv("SLACK_BOT_TOKEN", ""),
 		GitHubOrg:                  getEnv("GITHUB_ORG", ""),
 		WorkingDir:                 getEnv("WORKING_DIR", "/tmp"),
