@@ -76,6 +76,11 @@ func getEnvAsInt(key, defaultValue string) int {
 	if i, err := strconv.Atoi(val); err == nil {
 		return i
 	}
+	// If parsing fails, try to parse the default value
+	if i, err := strconv.Atoi(defaultValue); err == nil {
+		log.Printf("Unable to parse %s=%q as int; using default %d", key, val, i)
+		return i
+	}
 	log.Printf("Unable to parse %s=%q as int; defaulting to 0", key, val)
 	return 0
 }
