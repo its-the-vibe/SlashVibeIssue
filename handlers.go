@@ -514,7 +514,7 @@ func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issue
 	}
 
 	// Search through recent messages in the confirmation channel
-	// We'll look back up to 1000 messages (Slack API limit)
+	// We paginate through messages 100 at a time until we find a match or run out of messages
 	historyParams := &slack.GetConversationHistoryParameters{
 		ChannelID:          channelID,
 		Limit:              100,
@@ -530,15 +530,10 @@ func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issue
 		// Search through messages for matching metadata
 		for _, message := range history.Messages {
 			if message.Metadata.EventType == issueCreatedEventType {
-				// Parse metadata to check for matching issue URL
-				if payloadBytes, err := json.Marshal(message.Metadata.EventPayload); err == nil {
-					var metadata MessageMetadata
-					if err := json.Unmarshal(payloadBytes, &metadata.EventPayload); err == nil {
-						if msgIssueURL, ok := metadata.EventPayload["issue_url"].(string); ok {
-							if msgIssueURL == issueURL {
-								return channelID, message.Timestamp, nil
-							}
-						}
+				// Check for matching issue URL directly from EventPayload
+				if msgIssueURL, ok := message.Metadata.EventPayload["issue_url"].(string); ok {
+					if msgIssueURL == issueURL {
+						return channelID, message.Timestamp, nil
 					}
 				}
 			}
