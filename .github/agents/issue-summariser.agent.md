@@ -21,12 +21,12 @@ When called, you will receive a Slack message that represents the body/content o
 
 You **must** return your response as valid JSON in the following format:
 
-```json
 {
   "originalPrompt": "<the exact input message you received>",
   "title": "<your generated GitHub issue title>"
 }
-```
+
+Please ensure the JSON is well-formed and would be parsable by standard JSON parsers.
 
 ## Title Guidelines
 
