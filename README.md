@@ -10,6 +10,7 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 
 - 🎯 Interactive Slack modal for creating GitHub issues
 - 🔄 Redis pub/sub for receiving Slack commands and view submissions
+- 🎫 Ticket emoji reaction to auto-generate issue titles from message content
 - ✨ Emoji reaction support to assign issues to Copilot after creation
 - 🐙 Poppit integration for executing GitHub CLI commands
 - ✅ Automatic confirmation messages via SlackLiner
@@ -121,6 +122,22 @@ docker-compose up
    - "Add to project" checkbox is checked by default
 3. Click "Create Issue"
 4. Confirmation message appears in the configured confirmation channel
+
+### Creating an Issue from a Message (Ticket Reaction)
+
+You can also create an issue by adding a 🎫 (`:ticket:`) emoji reaction to any Slack message:
+
+1. Write your issue description in a Slack message (in any channel)
+2. React to the message with 🎫 (`:ticket:`) emoji
+3. The service will:
+   - Extract the message text
+   - Send it to GitHub Copilot to generate a summary title
+   - Store the generated title and description in Redis
+   - Send you a DM with the generated title
+4. Type `/issue` to open the modal pre-populated with the generated title and description
+5. Fill in the repository selection and submit to create the issue
+
+Note: The generated title and description are stored for 1 hour. If you don't create the issue within that time, you'll need to add the ticket reaction again.
 
 ### Assigning Issue to Copilot via Emoji Reaction
 
