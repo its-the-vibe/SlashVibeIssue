@@ -617,10 +617,20 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 		return
 	}
 
-	log.Printf("Generating title for message text (length: %d)", len(messageText))
+	log.Printf("Opening modal with loading state for message text (length: %d)", len(messageText))
 
-	// Send command to Poppit to generate title
-	err := generateIssueTitleViaCopilot(ctx, rdb, messageText, action.User.Username, action.TriggerID, config)
+	// Open modal immediately with loading state to avoid trigger_id expiration
+	loadingModal := createIssueModal("⏳ Generating title...", messageText, false)
+	viewResponse, err := slackClient.OpenView(action.TriggerID, loadingModal)
+	if err != nil {
+		log.Printf("Error opening modal: %v", err)
+		return
+	}
+
+	log.Printf("Modal opened successfully with view_id: %s", viewResponse.ID)
+
+	// Send command to Poppit to generate title with view_id for later update
+	err = generateIssueTitleViaCopilot(ctx, rdb, messageText, action.User.Username, viewResponse.ID, config)
 	if err != nil {
 		log.Printf("Error generating issue title: %v", err)
 		return
@@ -629,14 +639,14 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 	log.Printf("Title generation command sent to Poppit for user: %s", action.User.Username)
 }
 
-func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, triggerID string, config Config) error {
+func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, viewID string, config Config) error {
 	// Escape single quotes in the message body for shell command
 	escapedMessage := strings.ReplaceAll(messageBody, `'`, `'\''`)
 
 	// Build the copilot command
 	copilotCmd := fmt.Sprintf("copilot --model gpt-4.1 --agent issue-summariser --prompt '%s'", escapedMessage)
 
-	// Create Poppit command message with metadata including trigger_id
+	// Create Poppit command message with metadata including view_id
 	poppitCmd := PoppitCommand{
 		Repo:     fmt.Sprintf("%s/SlashVibeIssue", config.GitHubOrg),
 		Branch:   "refs/heads/main",
@@ -644,8 +654,8 @@ func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messag
 		Dir:      config.AgentWorkingDir,
 		Commands: []string{copilotCmd},
 		Metadata: map[string]interface{}{
-			"username":   username,
-			"trigger_id": triggerID,
+			"username": username,
+			"view_id":  viewID,
 		},
 	}
 
@@ -674,15 +684,15 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 	}
 
 	username, _ := metadata["username"].(string)
-	triggerID, _ := metadata["trigger_id"].(string)
+	viewID, _ := metadata["view_id"].(string)
 
 	if username == "" {
 		log.Printf("Missing username in metadata")
 		return
 	}
 
-	if triggerID == "" {
-		log.Printf("Missing trigger_id in metadata")
+	if viewID == "" {
+		log.Printf("Missing view_id in metadata")
 		return
 	}
 
@@ -700,13 +710,13 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 
 	log.Printf("Generated title for user %s: %s", username, titleOutput.Title)
 
-	// Open modal with pre-populated title and description
-	modal := createIssueModal(titleOutput.Title, titleOutput.Prompt, false)
-	_, err := slackClient.OpenView(triggerID, modal)
+	// Update modal with generated title and description
+	updatedModal := createIssueModal(titleOutput.Title, titleOutput.Prompt, false)
+	_, err := slackClient.UpdateView(updatedModal, "", "", viewID)
 	if err != nil {
-		log.Printf("Error opening modal: %v", err)
+		log.Printf("Error updating modal: %v", err)
 		return
 	}
 
-	log.Printf("Modal opened successfully for user %s", username)
+	log.Printf("Modal updated successfully for user %s", username)
 }

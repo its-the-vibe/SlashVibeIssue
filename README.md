@@ -133,12 +133,12 @@ You can create an issue with an AI-generated title using a message shortcut:
 2. Click the message's "More actions" menu (three dots)
 3. Select "Create GitHub Issue" shortcut
 4. The service will:
-   - Extract the message text
-   - Send it to GitHub Copilot via Poppit to generate a summary title
-   - Open the issue creation modal pre-populated with the generated title and original message as the description
+   - Immediately open the issue creation modal with a loading state (title shows "⏳ Generating title...")
+   - Extract the message text and send it to GitHub Copilot via Poppit to generate a summary title
+   - Update the modal asynchronously with the generated title when Copilot responds
 5. Review the pre-populated fields, select a repository, and submit to create the issue
 
-Note: The message shortcut must be configured in your Slack app with callback_id `create_github_issue`.
+Note: The message shortcut must be configured in your Slack app with callback_id `create_github_issue`. The modal opens immediately to avoid trigger_id expiration (3-second timeout), then updates with the AI-generated title.
 
 ### Assigning Issue to Copilot via Emoji Reaction
 
