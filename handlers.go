@@ -630,7 +630,7 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 	log.Printf("Modal opened successfully with view_id: %s", viewResponse.ID)
 
 	// Send command to Poppit to generate title with view_id for later update
-	err = generateIssueTitleViaCopilot(ctx, rdb, messageText, action.User.Username, viewResponse.ID, config)
+	err = generateIssueTitleViaCopilot(ctx, rdb, messageText, action.User.Username, viewResponse.ID, viewResponse.Hash, config)
 	if err != nil {
 		log.Printf("Error generating issue title: %v", err)
 		return
@@ -639,7 +639,7 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 	log.Printf("Title generation command sent to Poppit for user: %s", action.User.Username)
 }
 
-func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, viewID string, config Config) error {
+func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, viewID string, hash string, config Config) error {
 	// Escape single quotes in the message body for shell command
 	escapedMessage := strings.ReplaceAll(messageBody, `'`, `'\''`)
 
@@ -656,6 +656,7 @@ func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messag
 		Metadata: map[string]interface{}{
 			"username": username,
 			"view_id":  viewID,
+			"hash":     hash,
 		},
 	}
 
@@ -685,6 +686,7 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 
 	username, _ := metadata["username"].(string)
 	viewID, _ := metadata["view_id"].(string)
+	hash, _ := metadata["hash"].(string)
 
 	if username == "" {
 		log.Printf("Missing username in metadata")
@@ -693,6 +695,11 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 
 	if viewID == "" {
 		log.Printf("Missing view_id in metadata")
+		return
+	}
+
+	if hash == "" {
+		log.Printf("Missing hash in metadata")
 		return
 	}
 
@@ -712,7 +719,7 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 
 	// Update modal with generated title and description
 	updatedModal := createIssueModal(titleOutput.Title, titleOutput.Prompt, false)
-	viewResp, err := slackClient.UpdateView(updatedModal, "", "", viewID)
+	viewResp, err := slackClient.UpdateView(updatedModal, "", hash, viewID)
 	if err != nil {
 		log.Printf("Error updating modal: %v", err)
 		return
