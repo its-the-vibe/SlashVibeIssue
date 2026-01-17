@@ -95,3 +95,14 @@ type TimeBombMessage struct {
 	Ts      string `json:"ts"`
 	TTL     int    `json:"ttl"`
 }
+
+type TitleGenerationOutput struct {
+	Version int    `json:"version"`
+	Title   string `json:"title"`
+	Prompt  string `json:"prompt"`
+}
+
+type StoredIssueData struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/slack-go/slack"
@@ -229,4 +230,69 @@ func TestTransformAPIURLToWebURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTitleGenerationOutputUnmarshal(t *testing.T) {
+tests := []struct {
+name           string
+jsonOutput     string
+expectedTitle  string
+expectedPrompt string
+expectError    bool
+}{
+{
+name: "Valid title generation output",
+jsonOutput: `{
+"version": 1,
+"title": "Fix Slack message search for commit hash in threads",
+"prompt": "The slack message search by git commit hash is not working. Maybe the slack message search is not searching threads.  Can you investigate and fix?"
+}`,
+expectedTitle:  "Fix Slack message search for commit hash in threads",
+expectedPrompt: "The slack message search by git commit hash is not working. Maybe the slack message search is not searching threads.  Can you investigate and fix?",
+expectError:    false,
+},
+{
+name: "Output with different version",
+jsonOutput: `{
+"version": 2,
+"title": "Update documentation",
+"prompt": "Please update the README with new instructions"
+}`,
+expectedTitle:  "Update documentation",
+expectedPrompt: "Please update the README with new instructions",
+expectError:    false,
+},
+{
+name:        "Invalid JSON",
+jsonOutput:  `{"invalid json"`,
+expectError: true,
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+var output TitleGenerationOutput
+err := json.Unmarshal([]byte(tt.jsonOutput), &output)
+
+if tt.expectError {
+if err == nil {
+t.Errorf("Expected error but got none")
+}
+return
+}
+
+if err != nil {
+t.Errorf("Unexpected error: %v", err)
+return
+}
+
+if output.Title != tt.expectedTitle {
+t.Errorf("Title = %q, want %q", output.Title, tt.expectedTitle)
+}
+
+if output.Prompt != tt.expectedPrompt {
+t.Errorf("Prompt = %q, want %q", output.Prompt, tt.expectedPrompt)
+}
+})
+}
 }

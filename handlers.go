@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/slack-go/slack"
@@ -32,12 +33,12 @@ func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClien
 			if msg == nil {
 				continue
 			}
-			handleSlashCommand(ctx, slackClient, msg.Payload, config)
+			handleSlashCommand(ctx, rdb, slackClient, msg.Payload, config)
 		}
 	}
 }
 
-func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload string, config Config) {
+func handleSlashCommand(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
 	var cmd SlackCommand
 	if err := json.Unmarshal([]byte(payload), &cmd); err != nil {
 		log.Printf("Error unmarshaling slash command: %v", err)
@@ -51,24 +52,45 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 
 	log.Printf("Received /issue command from user %s", cmd.UserName)
 
-	// Check if the text is the sparkles emoji for setup-ai command
-	text := strings.TrimSpace(cmd.Text)
+	// Check if there's stored issue data for this user
+	redisKey := fmt.Sprintf("slash-vibe-issue:pending:%s", cmd.UserName)
+	storedData, err := rdb.Get(ctx, redisKey).Result()
+	
 	var initialTitle, initialDescription string
 	var preselectCopilot bool
 
-	if text == ":sparkles:" {
-		initialTitle = "✨ Set up Copilot instructions"
-		initialDescription = "Configure instructions for this repository as documented in [Best practices for Copilot coding agent in your repository](https://gh.io/copilot-coding-agent-tips).\n\n<Onboard this repo>"
-		preselectCopilot = true
+	if err == nil && storedData != "" {
+		// We have stored data from a ticket reaction
+		var issueData StoredIssueData
+		if err := json.Unmarshal([]byte(storedData), &issueData); err == nil {
+			initialTitle = issueData.Title
+			initialDescription = issueData.Description
+			preselectCopilot = false
+			log.Printf("Using stored issue data for user %s", cmd.UserName)
+			
+			// Delete the stored data after using it
+			rdb.Del(ctx, redisKey)
+		} else {
+			log.Printf("Error unmarshaling stored issue data: %v", err)
+		}
 	} else {
-		initialTitle = text
-		initialDescription = ""
-		preselectCopilot = false
+		// No stored data, check if the text is the sparkles emoji for setup-ai command
+		text := strings.TrimSpace(cmd.Text)
+
+		if text == ":sparkles:" {
+			initialTitle = "✨ Set up Copilot instructions"
+			initialDescription = "Configure instructions for this repository as documented in [Best practices for Copilot coding agent in your repository](https://gh.io/copilot-coding-agent-tips).\n\n<Onboard this repo>"
+			preselectCopilot = true
+		} else {
+			initialTitle = text
+			initialDescription = ""
+			preselectCopilot = false
+		}
 	}
 
 	// Open modal with pre-populated values
 	modal := createIssueModal(initialTitle, initialDescription, preselectCopilot)
-	_, err := slackClient.OpenView(cmd.TriggerID, modal)
+	_, err = slackClient.OpenView(cmd.TriggerID, modal)
 	if err != nil {
 		log.Printf("Error opening modal: %v", err)
 		return
@@ -218,7 +240,13 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, 
 		return
 	}
 
-	// Only handle slash-vibe-issue type
+	// Handle different output types
+	if output.Type == "slash-vibe-issue-ticket-title" {
+		handleTitleGenerationOutput(ctx, rdb, output, config)
+		return
+	}
+
+	// Only handle slash-vibe-issue type for the rest
 	if output.Type != "slash-vibe-issue" {
 		return
 	}
@@ -311,8 +339,8 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 	}
 
-	// Only handle sparkles emoji
-	if reaction.Event.Reaction != "sparkles" {
+	// Only handle sparkles or ticket emoji
+	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" {
 		return
 	}
 
@@ -321,7 +349,13 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		return
 	}
 
-	log.Printf("Received sparkles reaction from user %s on message %s", reaction.Event.User, reaction.Event.Item.Ts)
+	log.Printf("Received %s reaction from user %s on message %s", reaction.Event.Reaction, reaction.Event.User, reaction.Event.Item.Ts)
+
+	// Handle ticket emoji differently from sparkles
+	if reaction.Event.Reaction == "ticket" {
+		handleTicketReaction(ctx, rdb, slackClient, reaction, config)
+		return
+	}
 
 	// Fetch the message from Slack to get metadata
 	historyParams := &slack.GetConversationHistoryParameters{
@@ -475,6 +509,159 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 	}
 
 	log.Printf("Set TTL to 24 hours for message ts=%s", messageTs)
+}
+
+func handleTicketReaction(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, reaction ReactionAddedEvent, config Config) {
+	// Fetch the message from Slack to get the text
+	historyParams := &slack.GetConversationHistoryParameters{
+		ChannelID:          reaction.Event.Item.Channel,
+		Latest:             reaction.Event.Item.Ts,
+		Limit:              1,
+		Inclusive:          true,
+		IncludeAllMetadata: true,
+	}
+
+	history, err := slackClient.GetConversationHistory(historyParams)
+	if err != nil {
+		log.Printf("Error fetching message from Slack: %v", err)
+		return
+	}
+
+	if len(history.Messages) == 0 {
+		log.Printf("No message found for timestamp: %s", reaction.Event.Item.Ts)
+		return
+	}
+
+	message := history.Messages[0]
+
+	// Get the message text
+	messageText := message.Text
+	if messageText == "" {
+		log.Printf("Message has no text, ignoring ticket reaction")
+		return
+	}
+
+	log.Printf("Generating title for message text (length: %d)", len(messageText))
+
+	// Send command to Poppit to generate title
+	err = generateIssueTitleViaCopilot(ctx, rdb, messageText, reaction.Event.User, config)
+	if err != nil {
+		log.Printf("Error generating issue title: %v", err)
+		return
+	}
+
+	log.Printf("Title generation command sent to Poppit for user: %s", reaction.Event.User)
+}
+
+func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username string, config Config) error {
+	// Escape single quotes in the message body for shell command
+	escapedMessage := strings.ReplaceAll(messageBody, `'`, `'\''`)
+	
+	// Build the copilot command
+	copilotCmd := fmt.Sprintf("copilot --model gpt-4.1 --agent issue-summariser --prompt '%s'", escapedMessage)
+
+	// Create Poppit command message with metadata
+	poppitCmd := PoppitCommand{
+		Repo:     fmt.Sprintf("%s/SlashVibeIssue", config.GitHubOrg),
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-ticket-title",
+		Dir:      config.WorkingDir,
+		Commands: []string{copilotCmd},
+		Metadata: map[string]interface{}{
+			"username": username,
+		},
+	}
+
+	payload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
+	}
+
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	return nil
+}
+
+func handleTitleGenerationOutput(ctx context.Context, rdb *redis.Client, output PoppitOutput, config Config) {
+	log.Printf("Received Poppit output for title generation")
+
+	// Extract metadata
+	metadata := output.Metadata
+	if metadata == nil {
+		log.Printf("No metadata in Poppit output")
+		return
+	}
+
+	username, _ := metadata["username"].(string)
+	if username == "" {
+		log.Printf("Missing username in metadata")
+		return
+	}
+
+	// Parse the JSON output
+	var titleOutput TitleGenerationOutput
+	if err := json.Unmarshal([]byte(output.Output), &titleOutput); err != nil {
+		log.Printf("Error unmarshaling title generation output: %v", err)
+		return
+	}
+
+	if titleOutput.Title == "" {
+		log.Printf("Generated title is empty")
+		return
+	}
+
+	log.Printf("Generated title for user %s: %s", username, titleOutput.Title)
+
+	// Store the generated issue data in Redis for the user
+	// Key format: slash-vibe-issue:pending:<user_id>
+	// TTL: 1 hour (3600 seconds)
+	issueData := StoredIssueData{
+		Title:       titleOutput.Title,
+		Description: titleOutput.Prompt,
+	}
+
+	payload, err := json.Marshal(issueData)
+	if err != nil {
+		log.Printf("Error marshaling stored issue data: %v", err)
+		return
+	}
+
+	redisKey := fmt.Sprintf("slash-vibe-issue:pending:%s", username)
+	err = rdb.Set(ctx, redisKey, payload, 3600*time.Second).Err()
+	if err != nil {
+		log.Printf("Error storing issue data in Redis: %v", err)
+		return
+	}
+
+	log.Printf("Stored issue data in Redis for user %s", username)
+
+	// Send a message to the user via SlackLiner to let them know the title is ready
+	message := fmt.Sprintf("✨ I've generated an issue title for you! Type `/issue` to create the issue.\n\n*Title:* %s\n*Description:* %s",
+		titleOutput.Title, titleOutput.Prompt)
+
+	slackLinerMsg := SlackLinerMessage{
+		Channel: username, // Send as DM to the user
+		Text:    message,
+		TTL:     3600, // 1 hour
+	}
+
+	msgPayload, err := json.Marshal(slackLinerMsg)
+	if err != nil {
+		log.Printf("Error marshaling SlackLiner message: %v", err)
+		return
+	}
+
+	err = rdb.RPush(ctx, config.RedisSlackLinerList, msgPayload).Err()
+	if err != nil {
+		log.Printf("Error pushing to SlackLiner list: %v", err)
+		return
+	}
+
+	log.Printf("Sent notification to user %s", username)
 }
 
 func transformAPIURLToWebURL(apiURL string) string {
