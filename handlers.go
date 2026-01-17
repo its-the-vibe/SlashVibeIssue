@@ -191,7 +191,7 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 	log.Printf("GitHub issue creation command sent to Poppit for repo: %s/%s", config.GitHubOrg, repo)
 }
 
-func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, config Config) {
+func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
 	pubsub := rdb.Subscribe(ctx, config.RedisPoppitOutputChannel)
 	defer pubsub.Close()
 
@@ -206,15 +206,21 @@ func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, config Conf
 			if msg == nil {
 				continue
 			}
-			handlePoppitOutput(ctx, rdb, msg.Payload, config)
+			handlePoppitOutput(ctx, rdb, slackClient, msg.Payload, config)
 		}
 	}
 }
 
-func handlePoppitOutput(ctx context.Context, rdb *redis.Client, payload string, config Config) {
+func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
 	var output PoppitOutput
 	if err := json.Unmarshal([]byte(payload), &output); err != nil {
 		log.Printf("Error unmarshaling Poppit output: %v", err)
+		return
+	}
+
+	// Handle title generation output
+	if output.Type == "slash-vibe-issue-ticket-title" {
+		handleTitleGenerationOutput(ctx, slackClient, output, config)
 		return
 	}
 
@@ -486,7 +492,7 @@ func transformAPIURLToWebURL(apiURL string) string {
 
 	// Remove the "https://api.github.com/repos/" prefix
 	path := strings.TrimPrefix(apiURL, "https://api.github.com/repos/")
-	
+
 	// Build the web URL
 	return "https://github.com/" + path
 }
@@ -564,4 +570,157 @@ func sendTTLToTimeBomb(ctx context.Context, rdb *redis.Client, channel, ts strin
 	}
 
 	return nil
+}
+
+func subscribeToMessageActions(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
+	pubsub := rdb.Subscribe(ctx, config.RedisMessageActionChannel)
+	defer pubsub.Close()
+
+	log.Printf("Subscribed to Redis channel: %s", config.RedisMessageActionChannel)
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			handleMessageAction(ctx, rdb, slackClient, msg.Payload, config)
+		}
+	}
+}
+
+func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
+	var action MessageActionEvent
+	if err := json.Unmarshal([]byte(payload), &action); err != nil {
+		log.Printf("Error unmarshaling message action: %v", err)
+		return
+	}
+
+	// Only handle message_action type with callback_id "create_github_issue"
+	if action.Type != "message_action" {
+		return
+	}
+
+	if action.CallbackID != "create_github_issue" {
+		return
+	}
+
+	log.Printf("Received create_github_issue message action from user %s", action.User.Username)
+
+	// Get the message text
+	messageText := action.Message.Text
+	if messageText == "" {
+		log.Printf("Message has no text, ignoring action")
+		return
+	}
+
+	log.Printf("Opening modal with loading state for message text (length: %d)", len(messageText))
+
+	// Open modal immediately with loading state to avoid trigger_id expiration
+	loadingModal := createIssueModal("⏳ Generating title...", messageText, false)
+	viewResponse, err := slackClient.OpenView(action.TriggerID, loadingModal)
+	if err != nil {
+		log.Printf("Error opening modal: %v", err)
+		return
+	}
+
+	log.Printf("Modal opened successfully with view_id: %s", viewResponse.ID)
+
+	// Send command to Poppit to generate title with view_id for later update
+	err = generateIssueTitleViaCopilot(ctx, rdb, messageText, action.User.Username, viewResponse.ID, config)
+	if err != nil {
+		log.Printf("Error generating issue title: %v", err)
+		return
+	}
+
+	log.Printf("Title generation command sent to Poppit for user: %s", action.User.Username)
+}
+
+func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, viewID string, config Config) error {
+	// Escape single quotes in the message body for shell command
+	escapedMessage := strings.ReplaceAll(messageBody, `'`, `'\''`)
+
+	// Build the copilot command
+	copilotCmd := fmt.Sprintf("copilot --model gpt-4.1 --agent issue-summariser --prompt '%s'", escapedMessage)
+
+	// Create Poppit command message with metadata including view_id
+	poppitCmd := PoppitCommand{
+		Repo:     fmt.Sprintf("%s/SlashVibeIssue", config.GitHubOrg),
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-ticket-title",
+		Dir:      config.AgentWorkingDir,
+		Commands: []string{copilotCmd},
+		Metadata: map[string]interface{}{
+			"username": username,
+			"view_id":  viewID,
+		},
+	}
+
+	payload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
+	}
+
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	return nil
+}
+
+func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client, output PoppitOutput, config Config) {
+	log.Printf("Received Poppit output for title generation")
+
+	// Extract metadata
+	metadata := output.Metadata
+	if metadata == nil {
+		log.Printf("No metadata in Poppit output")
+		return
+	}
+
+	username, _ := metadata["username"].(string)
+	viewID, _ := metadata["view_id"].(string)
+
+	if username == "" {
+		log.Printf("Missing username in metadata")
+		return
+	}
+
+	if viewID == "" {
+		log.Printf("Missing view_id in metadata")
+		return
+	}
+
+	// Parse the JSON output
+	var titleOutput TitleGenerationOutput
+	if err := json.Unmarshal([]byte(output.Output), &titleOutput); err != nil {
+		log.Printf("Error unmarshaling title generation output: %v", err)
+		return
+	}
+
+	if titleOutput.Title == "" {
+		log.Printf("Generated title is empty")
+		return
+	}
+
+	log.Printf("Generated title for user %s: %s", username, titleOutput.Title)
+
+	// Update modal with generated title and description
+	updatedModal := createIssueModal(titleOutput.Title, titleOutput.Prompt, false)
+	viewResp, err := slackClient.UpdateView(updatedModal, "", "", viewID)
+	if err != nil {
+		log.Printf("Error updating modal: %v", err)
+		return
+	}
+	// Optionally log the response for debugging
+	if viewResp != nil {
+		log.Printf("Slack API UpdateView response: %+v", viewResp)
+	}
+
+	log.Printf("Modal updated successfully for user %s", username)
 }

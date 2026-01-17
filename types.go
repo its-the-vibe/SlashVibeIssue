@@ -95,3 +95,33 @@ type TimeBombMessage struct {
 	Ts      string `json:"ts"`
 	TTL     int    `json:"ttl"`
 }
+
+type MessageActionEvent struct {
+	Type       string `json:"type"`
+	Token      string `json:"token"`
+	ActionTs   string `json:"action_ts"`
+	CallbackID string `json:"callback_id"`
+	TriggerID  string `json:"trigger_id"`
+	MessageTs  string `json:"message_ts"`
+	User       struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Name     string `json:"name"`
+	} `json:"user"`
+	Channel struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"channel"`
+	Message struct {
+		Type string `json:"type"`
+		User string `json:"user"`
+		Ts   string `json:"ts"`
+		Text string `json:"text"`
+	} `json:"message"`
+}
+
+type TitleGenerationOutput struct {
+	Version int    `json:"version"`
+	Title   string `json:"title"`
+	Prompt  string `json:"prompt"`
+}

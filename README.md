@@ -10,6 +10,7 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 
 - 🎯 Interactive Slack modal for creating GitHub issues
 - 🔄 Redis pub/sub for receiving Slack commands and view submissions
+- 🎫 Message shortcuts with AI-generated issue titles via Copilot
 - ✨ Emoji reaction support to assign issues to Copilot after creation
 - 🐙 Poppit integration for executing GitHub CLI commands
 - ✅ Automatic confirmation messages via SlackLiner
@@ -20,12 +21,13 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 
 ## Architecture
 
-The service subscribes to five Redis channels:
+The service subscribes to six Redis channels:
 1. **Slash commands channel** (default: `slack-commands`) - Receives `/issue` commands
 2. **View submission channel** (default: `slack-relay-view-submission`) - Receives modal submissions
 3. **Poppit output channel** (default: `poppit:command-output`) - Receives command execution output from Poppit
 4. **Reaction added channel** (default: `slack-relay-reaction-added`) - Receives emoji reaction events
-5. **GitHub webhook channel** (default: `github-webhook-issues`) - Receives GitHub issue webhook events
+5. **Message action channel** (default: `slack-relay-message-action`) - Receives message shortcut events
+6. **GitHub webhook channel** (default: `github-webhook-issues`) - Receives GitHub issue webhook events
 
 When a modal is submitted, the service:
 1. Extracts repository, title, description, and assignment preference
@@ -51,6 +53,7 @@ Environment variables:
 | `REDIS_CHANNEL` | `slack-commands` | Channel for slash commands |
 | `REDIS_VIEW_SUBMISSION_CHANNEL` | `slack-relay-view-submission` | Channel for view submissions |
 | `REDIS_REACTION_CHANNEL` | `slack-relay-reaction-added` | Channel for emoji reaction events |
+| `REDIS_MESSAGE_ACTION_CHANNEL` | `slack-relay-message-action` | Channel for message shortcut events |
 | `REDIS_SLACKLINER_LIST` | `slack_messages` | Redis list for SlackLiner messages |
 | `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
 | `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:command-output` | Redis channel for Poppit command output |
@@ -121,6 +124,21 @@ docker-compose up
    - "Add to project" checkbox is checked by default
 3. Click "Create Issue"
 4. Confirmation message appears in the configured confirmation channel
+
+### Creating an Issue from a Message (AI-Generated Title)
+
+You can create an issue with an AI-generated title using a message shortcut:
+
+1. Write your issue description in a Slack message (in any channel)
+2. Click the message's "More actions" menu (three dots)
+3. Select "Create GitHub Issue" shortcut
+4. The service will:
+   - Immediately open the issue creation modal with a loading state (title shows "⏳ Generating title...")
+   - Extract the message text and send it to GitHub Copilot via Poppit to generate a summary title
+   - Update the modal asynchronously with the generated title when Copilot responds
+5. Review the pre-populated fields, select a repository, and submit to create the issue
+
+Note: The message shortcut must be configured in your Slack app with callback_id `create_github_issue`. The modal opens immediately to avoid trigger_id expiration (3-second timeout), then updates with the AI-generated title.
 
 ### Assigning Issue to Copilot via Emoji Reaction
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/slack-go/slack"
@@ -76,53 +77,53 @@ func TestCreateIssueModalWithCustomTitle(t *testing.T) {
 }
 
 func TestExtractIssueURL(t *testing.T) {
-tests := []struct {
-name     string
-output   string
-expected string
-}{
-{
-name: "Valid output with issue URL",
-output: `Creating issue in its-the-vibe/SlashVibeIssue
+	tests := []struct {
+		name     string
+		output   string
+		expected string
+	}{
+		{
+			name: "Valid output with issue URL",
+			output: `Creating issue in its-the-vibe/SlashVibeIssue
 
 https://github.com/its-the-vibe/SlashVibeIssue/issues/13`,
-expected: "https://github.com/its-the-vibe/SlashVibeIssue/issues/13",
-},
-{
-name: "Output with extra whitespace",
-output: `Creating issue in its-the-vibe/SlashVibeIssue
+			expected: "https://github.com/its-the-vibe/SlashVibeIssue/issues/13",
+		},
+		{
+			name: "Output with extra whitespace",
+			output: `Creating issue in its-the-vibe/SlashVibeIssue
 
   https://github.com/its-the-vibe/SlashVibeIssue/issues/42  `,
-expected: "https://github.com/its-the-vibe/SlashVibeIssue/issues/42",
-},
-{
-name: "Multi-line output with URL in middle",
-output: `Creating issue in its-the-vibe/SlashVibeIssue
+			expected: "https://github.com/its-the-vibe/SlashVibeIssue/issues/42",
+		},
+		{
+			name: "Multi-line output with URL in middle",
+			output: `Creating issue in its-the-vibe/SlashVibeIssue
 Some other text
 https://github.com/its-the-vibe/TestRepo/issues/1
 More text`,
-expected: "https://github.com/its-the-vibe/TestRepo/issues/1",
-},
-{
-name:     "Output without issue URL",
-output:   "Creating issue in its-the-vibe/SlashVibeIssue\nSome error occurred",
-expected: "",
-},
-{
-name:     "Empty output",
-output:   "",
-expected: "",
-},
-}
+			expected: "https://github.com/its-the-vibe/TestRepo/issues/1",
+		},
+		{
+			name:     "Output without issue URL",
+			output:   "Creating issue in its-the-vibe/SlashVibeIssue\nSome error occurred",
+			expected: "",
+		},
+		{
+			name:     "Empty output",
+			output:   "",
+			expected: "",
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-result := extractIssueURL(tt.output)
-if result != tt.expected {
-t.Errorf("extractIssueURL() = %q, want %q", result, tt.expected)
-}
-})
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractIssueURL(tt.output)
+			if result != tt.expected {
+				t.Errorf("extractIssueURL() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
 }
 
 func TestCreateIssueModalWithProjectCheckbox(t *testing.T) {
@@ -140,7 +141,7 @@ func TestCreateIssueModalWithProjectCheckbox(t *testing.T) {
 		if actionBlock.BlockID != "assignment_block" {
 			t.Errorf("Expected block_id to be 'assignment_block', got '%s'", actionBlock.BlockID)
 		}
-		
+
 		// Verify we have 2 elements (assign to copilot and add to project checkboxes)
 		if len(actionBlock.Elements.ElementSet) != 2 {
 			t.Errorf("Expected 2 checkbox elements in assignment block, got %d", len(actionBlock.Elements.ElementSet))
@@ -226,6 +227,71 @@ func TestTransformAPIURLToWebURL(t *testing.T) {
 			result := transformAPIURLToWebURL(tt.apiURL)
 			if result != tt.expected {
 				t.Errorf("transformAPIURLToWebURL() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTitleGenerationOutputUnmarshal(t *testing.T) {
+	tests := []struct {
+		name           string
+		jsonOutput     string
+		expectedTitle  string
+		expectedPrompt string
+		expectError    bool
+	}{
+		{
+			name: "Valid title generation output",
+			jsonOutput: `{
+"version": 1,
+"title": "Fix Slack message search for commit hash in threads",
+"prompt": "The slack message search by git commit hash is not working. Maybe the slack message search is not searching threads.  Can you investigate and fix?"
+}`,
+			expectedTitle:  "Fix Slack message search for commit hash in threads",
+			expectedPrompt: "The slack message search by git commit hash is not working. Maybe the slack message search is not searching threads.  Can you investigate and fix?",
+			expectError:    false,
+		},
+		{
+			name: "Output with different version",
+			jsonOutput: `{
+"version": 2,
+"title": "Update documentation",
+"prompt": "Please update the README with new instructions"
+}`,
+			expectedTitle:  "Update documentation",
+			expectedPrompt: "Please update the README with new instructions",
+			expectError:    false,
+		},
+		{
+			name:        "Invalid JSON",
+			jsonOutput:  `{"invalid json"`,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output TitleGenerationOutput
+			err := json.Unmarshal([]byte(tt.jsonOutput), &output)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if output.Title != tt.expectedTitle {
+				t.Errorf("Title = %q, want %q", output.Title, tt.expectedTitle)
+			}
+
+			if output.Prompt != tt.expectedPrompt {
+				t.Errorf("Prompt = %q, want %q", output.Prompt, tt.expectedPrompt)
 			}
 		})
 	}
