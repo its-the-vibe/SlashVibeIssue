@@ -51,7 +51,7 @@ Environment variables:
 | `REDIS_CHANNEL` | `slack-commands` | Channel for slash commands |
 | `REDIS_VIEW_SUBMISSION_CHANNEL` | `slack-relay-view-submission` | Channel for view submissions |
 | `REDIS_REACTION_CHANNEL` | `slack-relay-reaction-added` | Channel for emoji reaction events |
-| `REDIS_SLACKLINER_LIST` | `slackliner:notifications` | Redis list for SlackLiner messages |
+| `REDIS_SLACKLINER_LIST` | `slack_messages` | Redis list for SlackLiner messages |
 | `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
 | `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:command-output` | Redis channel for Poppit command output |
 | `REDIS_GITHUB_WEBHOOK_CHANNEL` | `github-webhook-issues` | Redis channel for GitHub webhook events |
