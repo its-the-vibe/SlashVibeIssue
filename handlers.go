@@ -55,7 +55,7 @@ func handleSlashCommand(ctx context.Context, rdb *redis.Client, slackClient *sla
 	// Check if there's stored issue data for this user
 	redisKey := fmt.Sprintf("slash-vibe-issue:pending:%s", cmd.UserName)
 	storedData, err := rdb.Get(ctx, redisKey).Result()
-	
+
 	var initialTitle, initialDescription string
 	var preselectCopilot bool
 
@@ -67,7 +67,7 @@ func handleSlashCommand(ctx context.Context, rdb *redis.Client, slackClient *sla
 			initialDescription = issueData.Description
 			preselectCopilot = false
 			log.Printf("Using stored issue data for user %s", cmd.UserName)
-			
+
 			// Delete the stored data after using it
 			rdb.Del(ctx, redisKey)
 		} else {
@@ -556,7 +556,7 @@ func handleTicketReaction(ctx context.Context, rdb *redis.Client, slackClient *s
 func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username string, config Config) error {
 	// Escape single quotes in the message body for shell command
 	escapedMessage := strings.ReplaceAll(messageBody, `'`, `'\''`)
-	
+
 	// Build the copilot command
 	copilotCmd := fmt.Sprintf("copilot --model gpt-4.1 --agent issue-summariser --prompt '%s'", escapedMessage)
 
@@ -673,7 +673,7 @@ func transformAPIURLToWebURL(apiURL string) string {
 
 	// Remove the "https://api.github.com/repos/" prefix
 	path := strings.TrimPrefix(apiURL, "https://api.github.com/repos/")
-	
+
 	// Build the web URL
 	return "https://github.com/" + path
 }
