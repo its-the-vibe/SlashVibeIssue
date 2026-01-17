@@ -641,7 +641,7 @@ func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messag
 		Repo:     fmt.Sprintf("%s/SlashVibeIssue", config.GitHubOrg),
 		Branch:   "refs/heads/main",
 		Type:     "slash-vibe-issue-ticket-title",
-		Dir:      config.WorkingDir,
+		Dir:      config.AgentWorkingDir,
 		Commands: []string{copilotCmd},
 		Metadata: map[string]interface{}{
 			"username":   username,

@@ -28,6 +28,7 @@ type Config struct {
 	ConfirmationSearchLimit    int
 	ProjectID                  string
 	ProjectOrg                 string
+	AgentWorkingDir            string
 }
 
 func loadConfig() Config {
@@ -52,6 +53,7 @@ func loadConfig() Config {
 		ConfirmationSearchLimit:    getEnvAsInt("CONFIRMATION_SEARCH_LIMIT", "100"),
 		ProjectID:                  getEnv("PROJECT_ID", "1"),
 		ProjectOrg:                 getEnv("PROJECT_ORG", "its-the-vibe"),
+		AgentWorkingDir:            getEnv("AGENT_WORKING_DIR", "/tmp/agent"),
 	}
 }
 

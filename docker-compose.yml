@@ -15,6 +15,7 @@ services:
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - GITHUB_ORG=${GITHUB_ORG}
       - WORKING_DIR=${WORKING_DIR:-/tmp}
+      - AGENT_WORKING_DIR=${AGENT_WORKING_DIR:-/tmp/agent}
       - CONFIRMATION_CHANNEL_ID=${CONFIRMATION_CHANNEL_ID:-}
       - CONFIRMATION_TTL=${CONFIRMATION_TTL:-240h}
     restart: unless-stopped
