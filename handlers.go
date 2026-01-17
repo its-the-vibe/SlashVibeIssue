@@ -620,7 +620,9 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 	log.Printf("Opening modal with loading state for message text (length: %d)", len(messageText))
 
 	// Open modal immediately with loading state to avoid trigger_id expiration
-	loadingModal := createIssueModal("⏳ Generating title...", messageText, false)
+	// loadingModal := createIssueModal("⏳ Generating title...", messageText, false)
+	// NOTE: leaving blank otherwise Slack does not seem to update
+	loadingModal := createIssueModal("", messageText, false)
 	viewResponse, err := slackClient.OpenView(action.TriggerID, loadingModal)
 	if err != nil {
 		log.Printf("Error opening modal: %v", err)
@@ -719,7 +721,9 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 
 	// Update modal with generated title and description
 	updatedModal := createIssueModal(titleOutput.Title, titleOutput.Prompt, false)
-	viewResp, err := slackClient.UpdateView(updatedModal, "", hash, viewID)
+
+	// NOTE: not using hash
+	viewResp, err := slackClient.UpdateView(updatedModal, "", "", viewID)
 	if err != nil {
 		log.Printf("Error updating modal: %v", err)
 		return
