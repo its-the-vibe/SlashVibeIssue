@@ -712,10 +712,14 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 
 	// Update modal with generated title and description
 	updatedModal := createIssueModal(titleOutput.Title, titleOutput.Prompt, false)
-	_, err := slackClient.UpdateView(updatedModal, "", "", viewID)
+	viewResp, err := slackClient.UpdateView(updatedModal, "", "", viewID)
 	if err != nil {
 		log.Printf("Error updating modal: %v", err)
 		return
+	}
+	// Optionally log the response for debugging
+	if viewResp != nil {
+		log.Printf("Slack API UpdateView response: %+v", viewResp)
 	}
 
 	log.Printf("Modal updated successfully for user %s", username)
