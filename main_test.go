@@ -253,3 +253,109 @@ func TestTitleGenerationOutputUnmarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubWebhookEventUnmarshal(t *testing.T) {
+	tests := []struct {
+		name             string
+		jsonPayload      string
+		expectedAction   string
+		expectedAssignee string
+		expectedIssueURL string
+		expectError      bool
+	}{
+		{
+			name: "Issue assigned to Copilot",
+			jsonPayload: `{
+"action": "assigned",
+"assignee": {
+"login": "Copilot",
+"type": "Bot"
+},
+"issue": {
+"html_url": "https://github.com/org/repo/issues/42",
+"number": 42,
+"title": "Test Issue"
+}
+}`,
+			expectedAction:   "assigned",
+			expectedAssignee: "Copilot",
+			expectedIssueURL: "https://github.com/org/repo/issues/42",
+			expectError:      false,
+		},
+		{
+			name: "Issue assigned to regular user",
+			jsonPayload: `{
+"action": "assigned",
+"assignee": {
+"login": "johndoe",
+"type": "User"
+},
+"issue": {
+"html_url": "https://github.com/org/repo/issues/43",
+"number": 43,
+"title": "Another Test Issue"
+}
+}`,
+			expectedAction:   "assigned",
+			expectedAssignee: "johndoe",
+			expectedIssueURL: "https://github.com/org/repo/issues/43",
+			expectError:      false,
+		},
+		{
+			name: "Issue closed event",
+			jsonPayload: `{
+"action": "closed",
+"issue": {
+"html_url": "https://github.com/org/repo/issues/44",
+"number": 44,
+"title": "Closed Issue"
+}
+}`,
+			expectedAction:   "closed",
+			expectedAssignee: "",
+			expectedIssueURL: "https://github.com/org/repo/issues/44",
+			expectError:      false,
+		},
+		{
+			name:        "Invalid JSON",
+			jsonPayload: `{"invalid json"`,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var event GitHubWebhookEvent
+			err := json.Unmarshal([]byte(tt.jsonPayload), &event)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if event.Action != tt.expectedAction {
+				t.Errorf("Action = %q, want %q", event.Action, tt.expectedAction)
+			}
+
+			// Check assignee - handle nil case
+			var actualAssignee string
+			if event.Assignee != nil {
+				actualAssignee = event.Assignee.Login
+			}
+			if actualAssignee != tt.expectedAssignee {
+				t.Errorf("Assignee.Login = %q, want %q", actualAssignee, tt.expectedAssignee)
+			}
+
+			if event.Issue.HTMLURL != tt.expectedIssueURL {
+				t.Errorf("Issue.HTMLURL = %q, want %q", event.Issue.HTMLURL, tt.expectedIssueURL)
+			}
+		})
+	}
+}

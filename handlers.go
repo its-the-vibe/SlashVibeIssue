@@ -12,9 +12,11 @@ import (
 )
 
 const (
-	issueClosedReactionEmoji = "cat2"
-	issueClosedTTLSeconds    = 86400 // 24 hours
-	issueCreatedEventType    = "issue_created"
+	issueClosedReactionEmoji   = "cat2"
+	issueAssignedReactionEmoji = "sparkles"
+	issueClosedTTLSeconds      = 86400 // 24 hours
+	issueCreatedEventType      = "issue_created"
+	copilotAssigneeName        = "Copilot"
 )
 
 func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
@@ -432,11 +434,20 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 		return
 	}
 
-	// Only handle issue closed events
-	if event.Action != "closed" {
+	// Handle issue closed events
+	if event.Action == "closed" {
+		handleIssueClosed(ctx, rdb, slackClient, event, config)
 		return
 	}
 
+	// Handle issue assigned events
+	if event.Action == "assigned" {
+		handleIssueAssigned(ctx, rdb, slackClient, event, config)
+		return
+	}
+}
+
+func handleIssueClosed(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, event GitHubWebhookEvent, config Config) {
 	log.Printf("Received issue closed event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
 
 	// Use the html_url from the event payload
@@ -479,6 +490,56 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 	}
 
 	log.Printf("Set TTL to 24 hours for message ts=%s", messageTs)
+}
+
+func handleIssueAssigned(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, event GitHubWebhookEvent, config Config) {
+	log.Printf("Received issue assigned event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
+
+	// Check if assignee data is present
+	if event.Assignee == nil {
+		log.Printf("No assignee data in event")
+		return
+	}
+
+	// Check if assignee is Copilot
+	if event.Assignee.Login != copilotAssigneeName {
+		log.Printf("Assignee is not Copilot: %s", event.Assignee.Login)
+		return
+	}
+
+	log.Printf("Issue assigned to Copilot")
+
+	// Use the html_url from the event payload
+	issueURL := event.Issue.HTMLURL
+	if issueURL == "" {
+		log.Printf("Missing html_url in issue event")
+		return
+	}
+
+	log.Printf("Issue URL: %s", issueURL)
+
+	// Search for the message with matching metadata
+	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
+	if err != nil {
+		log.Printf("Error finding message by issue URL: %v", err)
+		return
+	}
+
+	if channelID == "" || messageTs == "" {
+		log.Printf("No message found for issue URL: %s", issueURL)
+		return
+	}
+
+	log.Printf("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
+
+	// Send sparkles reaction to SlackLiner
+	err = sendReactionToSlackLiner(ctx, rdb, issueAssignedReactionEmoji, channelID, messageTs, config)
+	if err != nil {
+		log.Printf("Error sending reaction: %v", err)
+		return
+	}
+
+	log.Printf("Sent sparkles reaction for message ts=%s", messageTs)
 }
 
 func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issueURL string, config Config) (string, string, error) {

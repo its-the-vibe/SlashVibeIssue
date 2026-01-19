@@ -75,8 +75,12 @@ type MessageMetadata struct {
 }
 
 type GitHubWebhookEvent struct {
-	Action string `json:"action"`
-	Issue  struct {
+	Action   string `json:"action"`
+	Assignee *struct {
+		Login string `json:"login"`
+		Type  string `json:"type"`
+	} `json:"assignee"`
+	Issue struct {
 		URL           string `json:"url"`
 		HTMLURL       string `json:"html_url"`
 		RepositoryURL string `json:"repository_url"`
