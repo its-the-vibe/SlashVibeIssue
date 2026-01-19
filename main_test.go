@@ -344,8 +344,13 @@ func TestGitHubWebhookEventUnmarshal(t *testing.T) {
 				t.Errorf("Action = %q, want %q", event.Action, tt.expectedAction)
 			}
 
-			if event.Assignee.Login != tt.expectedAssignee {
-				t.Errorf("Assignee.Login = %q, want %q", event.Assignee.Login, tt.expectedAssignee)
+			// Check assignee - handle nil case
+			var actualAssignee string
+			if event.Assignee != nil {
+				actualAssignee = event.Assignee.Login
+			}
+			if actualAssignee != tt.expectedAssignee {
+				t.Errorf("Assignee.Login = %q, want %q", actualAssignee, tt.expectedAssignee)
 			}
 
 			if event.Issue.HTMLURL != tt.expectedIssueURL {

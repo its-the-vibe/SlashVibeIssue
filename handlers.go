@@ -16,6 +16,7 @@ const (
 	issueAssignedReactionEmoji = "sparkles"
 	issueClosedTTLSeconds      = 86400 // 24 hours
 	issueCreatedEventType      = "issue_created"
+	copilotAssigneeName        = "Copilot"
 )
 
 func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
@@ -494,8 +495,14 @@ func handleIssueClosed(ctx context.Context, rdb *redis.Client, slackClient *slac
 func handleIssueAssigned(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, event GitHubWebhookEvent, config Config) {
 	log.Printf("Received issue assigned event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
 
+	// Check if assignee data is present
+	if event.Assignee == nil {
+		log.Printf("No assignee data in event")
+		return
+	}
+
 	// Check if assignee is Copilot
-	if event.Assignee.Login != "Copilot" {
+	if event.Assignee.Login != copilotAssigneeName {
 		log.Printf("Assignee is not Copilot: %s", event.Assignee.Login)
 		return
 	}

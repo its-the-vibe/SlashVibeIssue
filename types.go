@@ -76,7 +76,7 @@ type MessageMetadata struct {
 
 type GitHubWebhookEvent struct {
 	Action   string `json:"action"`
-	Assignee struct {
+	Assignee *struct {
 		Login string `json:"login"`
 		Type  string `json:"type"`
 	} `json:"assignee"`
