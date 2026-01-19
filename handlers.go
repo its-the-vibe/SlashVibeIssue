@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	issueClosedReactionEmoji = "cat2"
-	issueClosedTTLSeconds    = 86400 // 24 hours
-	issueCreatedEventType    = "issue_created"
+	issueClosedReactionEmoji   = "cat2"
+	issueAssignedReactionEmoji = "sparkles"
+	issueClosedTTLSeconds      = 86400 // 24 hours
+	issueCreatedEventType      = "issue_created"
 )
 
 func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
@@ -525,7 +526,7 @@ func handleIssueAssigned(ctx context.Context, rdb *redis.Client, slackClient *sl
 	log.Printf("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
 
 	// Send sparkles reaction to SlackLiner
-	err = sendReactionToSlackLiner(ctx, rdb, "sparkles", channelID, messageTs, config)
+	err = sendReactionToSlackLiner(ctx, rdb, issueAssignedReactionEmoji, channelID, messageTs, config)
 	if err != nil {
 		log.Printf("Error sending reaction: %v", err)
 		return
