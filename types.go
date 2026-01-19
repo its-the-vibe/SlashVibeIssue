@@ -78,6 +78,7 @@ type GitHubWebhookEvent struct {
 	Action string `json:"action"`
 	Issue  struct {
 		URL           string `json:"url"`
+		HTMLURL       string `json:"html_url"`
 		RepositoryURL string `json:"repository_url"`
 		Number        int    `json:"number"`
 		Title         string `json:"title"`
