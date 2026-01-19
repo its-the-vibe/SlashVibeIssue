@@ -439,16 +439,14 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 
 	log.Printf("Received issue closed event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
 
-	// Transform API URL to web URL
-	// From: https://api.github.com/repos/its-the-vibe/SlashVibeIssue/issues/13
-	// To: https://github.com/its-the-vibe/SlashVibeIssue/issues/13
-	issueURL := transformAPIURLToWebURL(event.Issue.URL)
+	// Use the html_url from the event payload
+	issueURL := event.Issue.HTMLURL
 	if issueURL == "" {
-		log.Printf("Failed to transform API URL to web URL: %s", event.Issue.URL)
+		log.Printf("Missing html_url in issue event")
 		return
 	}
 
-	log.Printf("Transformed issue URL: %s", issueURL)
+	log.Printf("Issue URL: %s", issueURL)
 
 	// Search for the message with matching metadata
 	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
@@ -481,20 +479,6 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 	}
 
 	log.Printf("Set TTL to 24 hours for message ts=%s", messageTs)
-}
-
-func transformAPIURLToWebURL(apiURL string) string {
-	// Transform from: https://api.github.com/repos/its-the-vibe/SlashVibeIssue/issues/13
-	// To: https://github.com/its-the-vibe/SlashVibeIssue/issues/13
-	if !strings.HasPrefix(apiURL, "https://api.github.com/repos/") {
-		return ""
-	}
-
-	// Remove the "https://api.github.com/repos/" prefix
-	path := strings.TrimPrefix(apiURL, "https://api.github.com/repos/")
-
-	// Build the web URL
-	return "https://github.com/" + path
 }
 
 func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issueURL string, config Config) (string, string, error) {
