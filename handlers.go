@@ -688,10 +688,6 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 
 func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, viewID string, hash string, config Config) error {
 	// Create structured input for issue-summariser agent
-	type AgentInput struct {
-		Message string `json:"message"`
-	}
-	
 	agentInput := AgentInput{
 		Message: messageBody,
 	}

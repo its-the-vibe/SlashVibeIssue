@@ -256,10 +256,6 @@ func TestTitleGenerationOutputUnmarshal(t *testing.T) {
 
 func TestAgentInputStructuredFormat(t *testing.T) {
 	// Test that the agent input is properly structured as JSON
-	type AgentInput struct {
-		Message string `json:"message"`
-	}
-	
 	tests := []struct {
 		name           string
 		message        string
