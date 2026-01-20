@@ -31,7 +31,7 @@ You will receive input in the following JSON format:
 You **must** return your response as valid JSON in the following format:
 
 {
-  "version": 1,
+  "version": 2,
   "title": "[your generated GitHub issue title]",
   "prompt": "[the exact input message you received]"
 }
@@ -61,13 +61,12 @@ When generating the title, follow these best practices:
 ```
 
 **Output:**
-```json
 {
-  "version": 1,
+  "version": 2,
   "title": "Add image upload support to user profile page",
   "prompt": "We need to add support for uploading images to the user profile page. Currently users can only set text-based information but many have requested the ability to upload a profile picture. This should support common formats like PNG, JPG, and GIF."
 }
-```
+
 
 ### Example 2
 **Input:**
@@ -78,13 +77,12 @@ When generating the title, follow these best practices:
 ```
 
 **Output:**
-```json
 {
-  "version": 1,
+  "version": 2,
   "title": "Fix API error when deleting users with posts",
   "prompt": "The API is returning 500 errors when we try to delete a user that has associated posts. Need to handle this case properly."
 }
-```
+
 
 ### Example 3
 **Input:**
@@ -95,19 +93,17 @@ When generating the title, follow these best practices:
 ```
 
 **Output:**
-```json
 {
-  "version": 1,
+  "version": 2,
   "title": "Update documentation for new authentication flow",
   "prompt": "Update the documentation to include the new authentication flow we implemented last week"
 }
-```
 
 ## Important Notes
 
 - Always parse the input JSON to extract the "message" field
 - Return valid JSON only - no additional commentary or explanation
-- Include a version field set to 1
+- Include a version field set to 2
 - Preserve the original message content exactly as received in the `prompt` field
 - If the input is very short or unclear, do your best to create a meaningful title
 - Focus on the action or problem, not implementation details
