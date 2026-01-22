@@ -68,6 +68,27 @@ Environment variables:
 | `CONFIRMATION_SEARCH_LIMIT` | `100` | Maximum number of recent messages to search for matching issue |
 | `PROJECT_ID` | `1` | GitHub project ID for automatic issue assignment |
 | `PROJECT_ORG` | `its-the-vibe` | GitHub organization for project assignment |
+| `LOG_LEVEL` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` |
+
+### Logging
+
+The service supports configurable log levels via the `LOG_LEVEL` environment variable:
+
+- **DEBUG**: Most verbose - includes all log messages including event filtering details and processing steps
+- **INFO** (default): Normal operations - service lifecycle events, successful operations, and important state changes
+- **WARN**: Non-critical issues - missing optional data, edge cases that don't prevent operation
+- **ERROR**: Failures - errors that prevent operations from completing successfully
+
+Example:
+```bash
+# Run with debug logging
+export LOG_LEVEL=DEBUG
+./slashvibeissue
+
+# Run with minimal logging (errors only)
+export LOG_LEVEL=ERROR
+./slashvibeissue
+```
 
 ## Building
 

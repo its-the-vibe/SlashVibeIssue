@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -23,7 +22,7 @@ func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClien
 	pubsub := rdb.Subscribe(ctx, config.RedisChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribed to Redis channel: %s", config.RedisChannel)
+	Info("Subscribed to Redis channel: %s", config.RedisChannel)
 
 	ch := pubsub.Channel()
 	for {
@@ -42,7 +41,7 @@ func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClien
 func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload string, config Config) {
 	var cmd SlackCommand
 	if err := json.Unmarshal([]byte(payload), &cmd); err != nil {
-		log.Printf("Error unmarshaling slash command: %v", err)
+		Error("Error unmarshaling slash command: %v", err)
 		return
 	}
 
@@ -51,7 +50,7 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 		return
 	}
 
-	log.Printf("Received /issue command from user %s", cmd.UserName)
+	Info("Received /issue command from user %s", cmd.UserName)
 
 	// Check if the text is the sparkles emoji for setup-ai command
 	text := strings.TrimSpace(cmd.Text)
@@ -72,18 +71,18 @@ func handleSlashCommand(ctx context.Context, slackClient *slack.Client, payload 
 	modal := createIssueModal(initialTitle, initialDescription, preselectCopilot)
 	_, err := slackClient.OpenView(cmd.TriggerID, modal)
 	if err != nil {
-		log.Printf("Error opening modal: %v", err)
+		Error("Error opening modal: %v", err)
 		return
 	}
 
-	log.Println("Modal opened successfully")
+	Debug("Modal opened successfully")
 }
 
 func subscribeToViewSubmissions(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
 	pubsub := rdb.Subscribe(ctx, config.RedisViewSubmissionChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribed to Redis channel: %s", config.RedisViewSubmissionChannel)
+	Info("Subscribed to Redis channel: %s", config.RedisViewSubmissionChannel)
 
 	ch := pubsub.Channel()
 	for {
@@ -102,7 +101,7 @@ func subscribeToViewSubmissions(ctx context.Context, rdb *redis.Client, slackCli
 func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
 	var submission ViewSubmission
 	if err := json.Unmarshal([]byte(payload), &submission); err != nil {
-		log.Printf("Error unmarshaling view submission: %v", err)
+		Error("Error unmarshaling view submission: %v", err)
 		return
 	}
 
@@ -111,7 +110,7 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 		return
 	}
 
-	log.Printf("Received view submission from user %s", submission.User.Username)
+	Debug("Received view submission from user %s", submission.User.Username)
 
 	// Extract values from the submission
 	values := submission.View.State.Values
@@ -179,27 +178,27 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 	}
 
 	if repo == "" || title == "" {
-		log.Println("Missing required fields: repo or title")
+		Warn("Missing required fields: repo or title")
 		return
 	}
 
 	// Create GitHub issue via Poppit
 	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, addToProject, submission.User.Username, config)
 	if err != nil {
-		log.Printf("Error creating GitHub issue: %v", err)
+		Error("Error creating GitHub issue: %v", err)
 		return
 	}
 
 	// Log the full repo name (supports both "org/repo" and "repo" formats)
 	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
-	log.Printf("GitHub issue creation command sent to Poppit for repo: %s", repoFullName)
+	Info("GitHub issue creation command sent to Poppit for repo: %s", repoFullName)
 }
 
 func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
 	pubsub := rdb.Subscribe(ctx, config.RedisPoppitOutputChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribed to Redis channel: %s", config.RedisPoppitOutputChannel)
+	Info("Subscribed to Redis channel: %s", config.RedisPoppitOutputChannel)
 
 	ch := pubsub.Channel()
 	for {
@@ -218,7 +217,7 @@ func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, slackClient
 func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
 	var output PoppitOutput
 	if err := json.Unmarshal([]byte(payload), &output); err != nil {
-		log.Printf("Error unmarshaling Poppit output: %v", err)
+		Error("Error unmarshaling Poppit output: %v", err)
 		return
 	}
 
@@ -233,12 +232,12 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 		return
 	}
 
-	log.Printf("Received Poppit output for slash-vibe-issue")
+	Debug("Received Poppit output for slash-vibe-issue")
 
 	// Extract metadata
 	metadata := output.Metadata
 	if metadata == nil {
-		log.Printf("No metadata in Poppit output")
+		Warn("No metadata in Poppit output")
 		return
 	}
 
@@ -248,32 +247,32 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 	assignedToCopilot, _ := metadata["assignedToCopilot"].(bool)
 
 	if repo == "" || title == "" || username == "" {
-		log.Printf("Missing required metadata: repo=%s, title=%s, username=%s", repo, title, username)
+		Warn("Missing required metadata: repo=%s, title=%s, username=%s", repo, title, username)
 		return
 	}
 
 	// Only process output from "gh issue create" commands
 	if !strings.HasPrefix(output.Command, "gh issue create") {
-		log.Printf("Ignoring non-issue-create command: %s", output.Command)
+		Debug("Ignoring non-issue-create command: %s", output.Command)
 		return
 	}
 
 	// Parse issue URL from output
 	issueURL := extractIssueURL(output.Output)
 	if issueURL == "" {
-		log.Printf("Failed to extract issue URL from output: %s", output.Output)
+		Error("Failed to extract issue URL from output: %s", output.Output)
 		return
 	}
 
-	log.Printf("Extracted issue URL: %s", issueURL)
+	Info("Extracted issue URL: %s", issueURL)
 
 	// Check if we should add to project
 	addToProject, _ := metadata["addToProject"].(bool)
 	if addToProject {
-		log.Printf("Adding issue to project")
+		Debug("Adding issue to project")
 		err := addIssueToProject(ctx, rdb, issueURL, config)
 		if err != nil {
-			log.Printf("Error adding issue to project: %v", err)
+			Error("Error adding issue to project: %v", err)
 		}
 	}
 
@@ -285,7 +284,7 @@ func subscribeToReactions(ctx context.Context, rdb *redis.Client, slackClient *s
 	pubsub := rdb.Subscribe(ctx, config.RedisReactionChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribed to Redis channel: %s", config.RedisReactionChannel)
+	Info("Subscribed to Redis channel: %s", config.RedisReactionChannel)
 
 	ch := pubsub.Channel()
 	for {
@@ -304,7 +303,7 @@ func subscribeToReactions(ctx context.Context, rdb *redis.Client, slackClient *s
 func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
 	var reaction ReactionAddedEvent
 	if err := json.Unmarshal([]byte(payload), &reaction); err != nil {
-		log.Printf("Error unmarshaling reaction event: %v", err)
+		Error("Error unmarshaling reaction event: %v", err)
 		return
 	}
 
@@ -316,7 +315,7 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 	// Ignore reactions from bots
 	for _, auth := range reaction.Authorizations {
 		if auth.IsBot && auth.UserID == reaction.Event.User {
-			log.Printf("Ignoring reaction from bot user: %s", reaction.Event.User)
+			Debug("Ignoring reaction from bot user: %s", reaction.Event.User)
 			return
 		}
 	}
@@ -331,7 +330,7 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		return
 	}
 
-	log.Printf("Received sparkles reaction from user %s on message %s", reaction.Event.User, reaction.Event.Item.Ts)
+	Info("Received sparkles reaction from user %s on message %s", reaction.Event.User, reaction.Event.Item.Ts)
 
 	// Fetch the message from Slack to get metadata
 	historyParams := &slack.GetConversationHistoryParameters{
@@ -344,12 +343,12 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 
 	history, err := slackClient.GetConversationHistory(historyParams)
 	if err != nil {
-		log.Printf("Error fetching message from Slack: %v", err)
+		Error("Error fetching message from Slack: %v", err)
 		return
 	}
 
 	if len(history.Messages) == 0 {
-		log.Printf("No message found for timestamp: %s", reaction.Event.Item.Ts)
+		Warn("No message found for timestamp: %s", reaction.Event.Item.Ts)
 		return
 	}
 
@@ -357,7 +356,7 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 
 	// Check if message has metadata
 	if message.Metadata.EventType == "" {
-		log.Printf("Message has no metadata, ignoring reaction")
+		Debug("Message has no metadata, ignoring reaction")
 		return
 	}
 
@@ -368,17 +367,17 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 	// Convert EventPayload to map
 	if payloadBytes, err := json.Marshal(message.Metadata.EventPayload); err == nil {
 		if err := json.Unmarshal(payloadBytes, &metadata.EventPayload); err != nil {
-			log.Printf("Error unmarshaling event payload: %v", err)
+			Error("Error unmarshaling event payload: %v", err)
 			return
 		}
 	} else {
-		log.Printf("Error marshaling event payload: %v", err)
+		Error("Error marshaling event payload: %v", err)
 		return
 	}
 
 	// Check if it's an issue_created event
 	if metadata.EventType != issueCreatedEventType {
-		log.Printf("Event type is not issue_created: %s", metadata.EventType)
+		Debug("Event type is not issue_created: %s", metadata.EventType)
 		return
 	}
 
@@ -388,32 +387,32 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 	assignedToCopilot, _ := metadata.EventPayload["assignedToCopilot"].(bool)
 
 	if issueURL == "" {
-		log.Printf("Missing issue_url in metadata")
+		Warn("Missing issue_url in metadata")
 		return
 	}
 
 	if assignedToCopilot {
-		log.Printf("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)
+		Debug("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)
 		return
 	}
 
-	log.Printf("Assigning issue to Copilot: %s", issueURL)
+	Info("Assigning issue to Copilot: %s", issueURL)
 
 	// Assign issue to Copilot
 	err = assignIssueToCopilot(ctx, rdb, issueURL, repository, config)
 	if err != nil {
-		log.Printf("Error assigning issue to Copilot: %v", err)
+		Error("Error assigning issue to Copilot: %v", err)
 		return
 	}
 
-	log.Printf("Successfully assigned issue to Copilot: %s", issueURL)
+	Info("Successfully assigned issue to Copilot: %s", issueURL)
 }
 
 func subscribeToGitHubWebhooks(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
 	pubsub := rdb.Subscribe(ctx, config.RedisGitHubWebhookChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribed to Redis channel: %s", config.RedisGitHubWebhookChannel)
+	Info("Subscribed to Redis channel: %s", config.RedisGitHubWebhookChannel)
 
 	ch := pubsub.Channel()
 	for {
@@ -432,7 +431,7 @@ func subscribeToGitHubWebhooks(ctx context.Context, rdb *redis.Client, slackClie
 func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
 	var event GitHubWebhookEvent
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
-		log.Printf("Error unmarshaling GitHub webhook event: %v", err)
+		Error("Error unmarshaling GitHub webhook event: %v", err)
 		return
 	}
 
@@ -450,98 +449,98 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 }
 
 func handleIssueClosed(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, event GitHubWebhookEvent, config Config) {
-	log.Printf("Received issue closed event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
+	Info("Received issue closed event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
 
 	// Use the html_url from the event payload
 	issueURL := event.Issue.HTMLURL
 	if issueURL == "" {
-		log.Printf("Missing html_url in issue event")
+		Warn("Missing html_url in issue event")
 		return
 	}
 
-	log.Printf("Issue URL: %s", issueURL)
+	Debug("Issue URL: %s", issueURL)
 
 	// Search for the message with matching metadata
 	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
 	if err != nil {
-		log.Printf("Error finding message by issue URL: %v", err)
+		Error("Error finding message by issue URL: %v", err)
 		return
 	}
 
 	if channelID == "" || messageTs == "" {
-		log.Printf("No message found for issue URL: %s", issueURL)
+		Debug("No message found for issue URL: %s", issueURL)
 		return
 	}
 
-	log.Printf("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
+	Debug("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
 
 	// Send reaction to SlackLiner
 	err = sendReactionToSlackLiner(ctx, rdb, issueClosedReactionEmoji, channelID, messageTs, config)
 	if err != nil {
-		log.Printf("Error sending reaction: %v", err)
+		Error("Error sending reaction: %v", err)
 		return
 	}
 
-	log.Printf("Sent %s reaction for message ts=%s", issueClosedReactionEmoji, messageTs)
+	Debug("Sent %s reaction for message ts=%s", issueClosedReactionEmoji, messageTs)
 
 	// Set TTL to 24 hours
 	err = sendTTLToTimeBomb(ctx, rdb, channelID, messageTs, issueClosedTTLSeconds, config)
 	if err != nil {
-		log.Printf("Error setting TTL: %v", err)
+		Error("Error setting TTL: %v", err)
 		return
 	}
 
-	log.Printf("Set TTL to 24 hours for message ts=%s", messageTs)
+	Debug("Set TTL to 24 hours for message ts=%s", messageTs)
 }
 
 func handleIssueAssigned(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, event GitHubWebhookEvent, config Config) {
-	log.Printf("Received issue assigned event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
+	Info("Received issue assigned event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
 
 	// Check if assignee data is present
 	if event.Assignee == nil {
-		log.Printf("No assignee data in event")
+		Warn("No assignee data in event")
 		return
 	}
 
 	// Check if assignee is Copilot
 	if event.Assignee.Login != copilotAssigneeName {
-		log.Printf("Assignee is not Copilot: %s", event.Assignee.Login)
+		Debug("Assignee is not Copilot: %s", event.Assignee.Login)
 		return
 	}
 
-	log.Printf("Issue assigned to Copilot")
+	Debug("Issue assigned to Copilot")
 
 	// Use the html_url from the event payload
 	issueURL := event.Issue.HTMLURL
 	if issueURL == "" {
-		log.Printf("Missing html_url in issue event")
+		Warn("Missing html_url in issue event")
 		return
 	}
 
-	log.Printf("Issue URL: %s", issueURL)
+	Debug("Issue URL: %s", issueURL)
 
 	// Search for the message with matching metadata
 	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
 	if err != nil {
-		log.Printf("Error finding message by issue URL: %v", err)
+		Error("Error finding message by issue URL: %v", err)
 		return
 	}
 
 	if channelID == "" || messageTs == "" {
-		log.Printf("No message found for issue URL: %s", issueURL)
+		Debug("No message found for issue URL: %s", issueURL)
 		return
 	}
 
-	log.Printf("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
+	Debug("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
 
 	// Send sparkles reaction to SlackLiner
 	err = sendReactionToSlackLiner(ctx, rdb, issueAssignedReactionEmoji, channelID, messageTs, config)
 	if err != nil {
-		log.Printf("Error sending reaction: %v", err)
+		Error("Error sending reaction: %v", err)
 		return
 	}
 
-	log.Printf("Sent sparkles reaction for message ts=%s", messageTs)
+	Debug("Sent sparkles reaction for message ts=%s", messageTs)
 }
 
 func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issueURL string, config Config) (string, string, error) {
@@ -623,7 +622,7 @@ func subscribeToMessageActions(ctx context.Context, rdb *redis.Client, slackClie
 	pubsub := rdb.Subscribe(ctx, config.RedisMessageActionChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribed to Redis channel: %s", config.RedisMessageActionChannel)
+	Info("Subscribed to Redis channel: %s", config.RedisMessageActionChannel)
 
 	ch := pubsub.Channel()
 	for {
@@ -642,7 +641,7 @@ func subscribeToMessageActions(ctx context.Context, rdb *redis.Client, slackClie
 func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, payload string, config Config) {
 	var action MessageActionEvent
 	if err := json.Unmarshal([]byte(payload), &action); err != nil {
-		log.Printf("Error unmarshaling message action: %v", err)
+		Error("Error unmarshaling message action: %v", err)
 		return
 	}
 
@@ -655,16 +654,16 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 		return
 	}
 
-	log.Printf("Received create_github_issue message action from user %s", action.User.Username)
+	Debug("Received create_github_issue message action from user %s", action.User.Username)
 
 	// Get the message text
 	messageText := action.Message.Text
 	if messageText == "" {
-		log.Printf("Message has no text, ignoring action")
+		Warn("Message has no text, ignoring action")
 		return
 	}
 
-	log.Printf("Opening modal with loading state for message text (length: %d)", len(messageText))
+	Debug("Opening modal with loading state for message text (length: %d)", len(messageText))
 
 	// Open modal immediately with loading state to avoid trigger_id expiration
 	// loadingModal := createIssueModal("⏳ Generating title...", messageText, false)
@@ -672,20 +671,20 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 	loadingModal := createIssueModal("", messageText, false)
 	viewResponse, err := slackClient.OpenView(action.TriggerID, loadingModal)
 	if err != nil {
-		log.Printf("Error opening modal: %v", err)
+		Error("Error opening modal: %v", err)
 		return
 	}
 
-	log.Printf("Modal opened successfully with view_id: %s", viewResponse.ID)
+	Debug("Modal opened successfully with view_id: %s", viewResponse.ID)
 
 	// Send command to Poppit to generate title with view_id for later update
 	err = generateIssueTitleViaCopilot(ctx, rdb, messageText, action.User.Username, viewResponse.ID, viewResponse.Hash, config)
 	if err != nil {
-		log.Printf("Error generating issue title: %v", err)
+		Error("Error generating issue title: %v", err)
 		return
 	}
 
-	log.Printf("Title generation command sent to Poppit for user: %s", action.User.Username)
+	Debug("Title generation command sent to Poppit for user: %s", action.User.Username)
 }
 
 func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, viewID string, hash string, config Config) error {
@@ -734,12 +733,12 @@ func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messag
 }
 
 func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client, output PoppitOutput, config Config) {
-	log.Printf("Received Poppit output for title generation")
+	Debug("Received Poppit output for title generation")
 
 	// Extract metadata
 	metadata := output.Metadata
 	if metadata == nil {
-		log.Printf("No metadata in Poppit output")
+		Warn("No metadata in Poppit output")
 		return
 	}
 
@@ -748,33 +747,33 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 	hash, _ := metadata["hash"].(string)
 
 	if username == "" {
-		log.Printf("Missing username in metadata")
+		Warn("Missing username in metadata")
 		return
 	}
 
 	if viewID == "" {
-		log.Printf("Missing view_id in metadata")
+		Warn("Missing view_id in metadata")
 		return
 	}
 
 	if hash == "" {
-		log.Printf("Missing hash in metadata")
+		Warn("Missing hash in metadata")
 		return
 	}
 
 	// Parse the JSON output
 	var titleOutput TitleGenerationOutput
 	if err := json.Unmarshal([]byte(output.Output), &titleOutput); err != nil {
-		log.Printf("Error unmarshaling title generation output: %v", err)
+		Error("Error unmarshaling title generation output: %v", err)
 		return
 	}
 
 	if titleOutput.Title == "" {
-		log.Printf("Generated title is empty")
+		Warn("Generated title is empty")
 		return
 	}
 
-	log.Printf("Generated title for user %s: %s", username, titleOutput.Title)
+	Info("Generated title for user %s: %s", username, titleOutput.Title)
 
 	// Update modal with generated title and description
 	updatedModal := createIssueModal(titleOutput.Title, titleOutput.Prompt, false)
@@ -782,13 +781,13 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 	// NOTE: not using hash
 	viewResp, err := slackClient.UpdateView(updatedModal, "", "", viewID)
 	if err != nil {
-		log.Printf("Error updating modal: %v", err)
+		Error("Error updating modal: %v", err)
 		return
 	}
 	// Optionally log the response for debugging
 	if viewResp != nil {
-		log.Printf("Slack API UpdateView response: %+v", viewResp)
+		Debug("Slack API UpdateView response: %+v", viewResp)
 	}
 
-	log.Printf("Modal updated successfully for user %s", username)
+	Debug("Modal updated successfully for user %s", username)
 }

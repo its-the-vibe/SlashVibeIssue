@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -109,7 +108,7 @@ func addIssueToProject(ctx context.Context, rdb *redis.Client, issueURL string, 
 		return fmt.Errorf("failed to push command to Poppit: %v", err)
 	}
 
-	log.Printf("Project assignment command sent to Poppit for issue: %s", issueURL)
+	Debug("Project assignment command sent to Poppit for issue: %s", issueURL)
 	return nil
 }
 
@@ -171,17 +170,17 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 
 	payload, err := json.Marshal(slackLinerMsg)
 	if err != nil {
-		log.Printf("Error marshaling SlackLiner message: %v", err)
+		Error("Error marshaling SlackLiner message: %v", err)
 		return
 	}
 
 	err = rdb.RPush(ctx, config.RedisSlackLinerList, payload).Err()
 	if err != nil {
-		log.Printf("Error pushing to SlackLiner list: %v", err)
+		Error("Error pushing to SlackLiner list: %v", err)
 		return
 	}
 
-	log.Printf("Confirmation message sent to SlackLiner for issue: %s", issueURL)
+	Debug("Confirmation message sent to SlackLiner for issue: %s", issueURL)
 }
 
 func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
@@ -214,6 +213,6 @@ func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo
 		return fmt.Errorf("failed to push command to Poppit: %v", err)
 	}
 
-	log.Printf("Copilot assignment command sent to Poppit for issue: %s", issueURL)
+	Debug("Copilot assignment command sent to Poppit for issue: %s", issueURL)
 	return nil
 }
