@@ -185,12 +185,15 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 }
 
 func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+	// Parse the repository to get full org/repo format
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+
 	// Build the gh command to assign issue to copilot
 	ghCmd := fmt.Sprintf("gh issue edit --add-assignee=\"@copilot\" %s", issueURL)
 
 	// Create Poppit command message
 	poppitCmd := PoppitCommand{
-		Repo:     repo,
+		Repo:     repoFullName,
 		Branch:   "refs/heads/main",
 		Type:     "slash-vibe-issue-assign-copilot",
 		Dir:      config.WorkingDir,
