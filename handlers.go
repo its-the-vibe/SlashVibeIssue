@@ -190,7 +190,9 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 		return
 	}
 
-	log.Printf("GitHub issue creation command sent to Poppit for repo: %s/%s", config.GitHubOrg, repo)
+	// Log the full repo name (supports both "org/repo" and "repo" formats)
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+	log.Printf("GitHub issue creation command sent to Poppit for repo: %s", repoFullName)
 }
 
 func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
@@ -691,12 +693,12 @@ func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messag
 	agentInput := AgentInput{
 		Message: messageBody,
 	}
-	
+
 	inputJSON, err := json.Marshal(agentInput)
 	if err != nil {
 		return fmt.Errorf("failed to marshal agent input: %v", err)
 	}
-	
+
 	// Escape single quotes in the JSON for shell command
 	escapedJSON := strings.ReplaceAll(string(inputJSON), `'`, `'\''`)
 
