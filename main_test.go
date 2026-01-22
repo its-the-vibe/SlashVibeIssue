@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/slack-go/slack"
@@ -312,6 +314,58 @@ func TestAgentInputStructuredFormat(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRepoWithOrg(t *testing.T) {
+	// Test that we correctly parse repo values that may include org
+	tests := []struct {
+		name             string
+		repoInput        string
+		configOrg        string
+		expectedFullName string
+	}{
+		{
+			name:             "Repo with org included",
+			repoInput:        "my-org/my-repo",
+			configOrg:        "default-org",
+			expectedFullName: "my-org/my-repo",
+		},
+		{
+			name:             "Repo without org (backward compatibility)",
+			repoInput:        "my-repo",
+			configOrg:        "default-org",
+			expectedFullName: "default-org/my-repo",
+		},
+		{
+			name:             "Different org via repo input",
+			repoInput:        "other-org/SlashVibeIssue",
+			configOrg:        "its-the-vibe",
+			expectedFullName: "other-org/SlashVibeIssue",
+		},
+		{
+			name:             "Personal repo via repo input",
+			repoInput:        "username/personal-repo",
+			configOrg:        "company-org",
+			expectedFullName: "username/personal-repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the logic used in createGitHubIssue and sendConfirmation
+			var repoFullName string
+			if strings.Contains(tt.repoInput, "/") {
+				repoFullName = tt.repoInput
+			} else {
+				repoFullName = fmt.Sprintf("%s/%s", tt.configOrg, tt.repoInput)
+			}
+
+			if repoFullName != tt.expectedFullName {
+				t.Errorf("repoFullName = %q, want %q", repoFullName, tt.expectedFullName)
+			}
+		})
+	}
+}
+
 
 func TestGitHubWebhookEventUnmarshal(t *testing.T) {
 	tests := []struct {

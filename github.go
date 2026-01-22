@@ -11,8 +11,15 @@ import (
 )
 
 func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot, addToProject bool, username string, config Config) error {
-	// Build the full repository name
-	repoFullName := fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
+	// Parse org and repo from the repo parameter
+	// If repo contains '/', it's already in "org/repo" format
+	// Otherwise, use the configured org
+	var repoFullName string
+	if strings.Contains(repo, "/") {
+		repoFullName = repo
+	} else {
+		repoFullName = fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
+	}
 
 	// Build the gh command with proper escaping
 	// Escape single quotes in title and description
@@ -130,8 +137,16 @@ func extractIssueNumber(issueURL string) int {
 }
 
 func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, assignedToCopilot bool, config Config) {
-	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s/%s\n*Title:* %s\n*URL:* %s",
-		username, config.GitHubOrg, repo, title, issueURL)
+	// Parse the repository to get full org/repo format
+	var repoFullName string
+	if strings.Contains(repo, "/") {
+		repoFullName = repo
+	} else {
+		repoFullName = fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
+	}
+
+	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s\n*Title:* %s\n*URL:* %s",
+		username, repoFullName, title, issueURL)
 
 	// Extract issue number from URL
 	issueNumber := extractIssueNumber(issueURL)
@@ -144,7 +159,7 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 			"title":             title,
 			"issue_number":      issueNumber,
 			"issue_url":         issueURL,
-			"repository":        fmt.Sprintf("%s/%s", config.GitHubOrg, repo),
+			"repository":        repoFullName,
 			"assignedToCopilot": assignedToCopilot,
 		},
 	}

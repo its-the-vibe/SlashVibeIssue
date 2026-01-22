@@ -190,7 +190,14 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 		return
 	}
 
-	log.Printf("GitHub issue creation command sent to Poppit for repo: %s/%s", config.GitHubOrg, repo)
+	// Log the full repo name (supports both "org/repo" and "repo" formats)
+	var repoFullName string
+	if strings.Contains(repo, "/") {
+		repoFullName = repo
+	} else {
+		repoFullName = fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
+	}
+	log.Printf("GitHub issue creation command sent to Poppit for repo: %s", repoFullName)
 }
 
 func subscribeToPoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
