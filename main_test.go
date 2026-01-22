@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/slack-go/slack"
@@ -351,16 +349,11 @@ func TestParseRepoWithOrg(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Simulate the logic used in createGitHubIssue and sendConfirmation
-			var repoFullName string
-			if strings.Contains(tt.repoInput, "/") {
-				repoFullName = tt.repoInput
-			} else {
-				repoFullName = fmt.Sprintf("%s/%s", tt.configOrg, tt.repoInput)
-			}
+			// Test the actual parseRepoFullName function
+			repoFullName := parseRepoFullName(tt.repoInput, tt.configOrg)
 
 			if repoFullName != tt.expectedFullName {
-				t.Errorf("repoFullName = %q, want %q", repoFullName, tt.expectedFullName)
+				t.Errorf("parseRepoFullName() = %q, want %q", repoFullName, tt.expectedFullName)
 			}
 		})
 	}

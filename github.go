@@ -10,16 +10,19 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// parseRepoFullName parses the repository parameter and returns the full "org/repo" format.
+// If the repo parameter contains '/', it's already in "org/repo" format and is returned as-is.
+// Otherwise, it combines the configured org with the repo name.
+func parseRepoFullName(repo string, configOrg string) string {
+	if strings.Contains(repo, "/") {
+		return repo
+	}
+	return fmt.Sprintf("%s/%s", configOrg, repo)
+}
+
 func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot, addToProject bool, username string, config Config) error {
 	// Parse org and repo from the repo parameter
-	// If repo contains '/', it's already in "org/repo" format
-	// Otherwise, use the configured org
-	var repoFullName string
-	if strings.Contains(repo, "/") {
-		repoFullName = repo
-	} else {
-		repoFullName = fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
-	}
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 
 	// Build the gh command with proper escaping
 	// Escape single quotes in title and description
@@ -43,7 +46,7 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 		Dir:      config.WorkingDir,
 		Commands: []string{ghCmd},
 		Metadata: map[string]interface{}{
-			"repo":              repo,
+			"repo":              repoFullName,
 			"title":             title,
 			"username":          username,
 			"addToProject":      addToProject,
@@ -138,12 +141,7 @@ func extractIssueNumber(issueURL string) int {
 
 func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, assignedToCopilot bool, config Config) {
 	// Parse the repository to get full org/repo format
-	var repoFullName string
-	if strings.Contains(repo, "/") {
-		repoFullName = repo
-	} else {
-		repoFullName = fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
-	}
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 
 	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s\n*Title:* %s\n*URL:* %s",
 		username, repoFullName, title, issueURL)

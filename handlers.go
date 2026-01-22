@@ -191,12 +191,7 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 	}
 
 	// Log the full repo name (supports both "org/repo" and "repo" formats)
-	var repoFullName string
-	if strings.Contains(repo, "/") {
-		repoFullName = repo
-	} else {
-		repoFullName = fmt.Sprintf("%s/%s", config.GitHubOrg, repo)
-	}
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 	log.Printf("GitHub issue creation command sent to Poppit for repo: %s", repoFullName)
 }
 
