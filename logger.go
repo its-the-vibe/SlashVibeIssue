@@ -39,8 +39,9 @@ func SetLogLevel(level string) {
 	case "ERROR":
 		currentLogLevel = ERROR
 	default:
-		log.Printf("Unknown log level '%s', defaulting to INFO", level)
+		// Use custom logger for consistency
 		currentLogLevel = INFO
+		logf(WARN, "Unknown log level '%s', defaulting to INFO", level)
 	}
 }
 
