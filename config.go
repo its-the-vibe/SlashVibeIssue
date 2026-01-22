@@ -29,6 +29,7 @@ type Config struct {
 	ProjectID                  string
 	ProjectOrg                 string
 	AgentWorkingDir            string
+	LogLevel                   string
 }
 
 func loadConfig() Config {
@@ -54,6 +55,7 @@ func loadConfig() Config {
 		ProjectID:                  getEnv("PROJECT_ID", "1"),
 		ProjectOrg:                 getEnv("PROJECT_ORG", "its-the-vibe"),
 		AgentWorkingDir:            getEnv("AGENT_WORKING_DIR", "/tmp/agent"),
+		LogLevel:                   getEnv("LOG_LEVEL", "INFO"),
 	}
 }
 

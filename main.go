@@ -15,11 +15,14 @@ import (
 func main() {
 	config := loadConfig()
 
+	// Initialize logger with configured level
+	SetLogLevel(config.LogLevel)
+
 	if config.SlackBotToken == "" {
-		log.Fatal("SLACK_BOT_TOKEN is required")
+		Fatal("SLACK_BOT_TOKEN is required")
 	}
 	if config.GitHubOrg == "" {
-		log.Fatal("GITHUB_ORG is required")
+		Fatal("GITHUB_ORG is required")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -35,9 +38,9 @@ func main() {
 
 	// Test Redis connection
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		Fatal("Failed to connect to Redis: %v", err)
 	}
-	log.Println("Connected to Redis")
+	Info("Connected to Redis")
 
 	// Setup Slack client
 	slackClient := slack.New(config.SlackBotToken)
@@ -57,7 +60,7 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
 
-	log.Println("Shutting down...")
+	Info("Shutting down...")
 	cancel()
 	time.Sleep(1 * time.Second)
 }
