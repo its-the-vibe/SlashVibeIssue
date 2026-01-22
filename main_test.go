@@ -259,55 +259,55 @@ func TestTitleGenerationOutputUnmarshal(t *testing.T) {
 func TestAgentInputStructuredFormat(t *testing.T) {
 	// Test that the agent input is properly structured as JSON
 	tests := []struct {
-		name           string
-		message        string
-		expectedJSON   string
+		name         string
+		message      string
+		expectedJSON string
 	}{
 		{
-			name:    "Simple message",
-			message: "Fix the bug in the login page",
+			name:         "Simple message",
+			message:      "Fix the bug in the login page",
 			expectedJSON: `{"message":"Fix the bug in the login page"}`,
 		},
 		{
-			name:    "Message with quotes",
-			message: `The user said "hello" to me`,
+			name:         "Message with quotes",
+			message:      `The user said "hello" to me`,
 			expectedJSON: `{"message":"The user said \"hello\" to me"}`,
 		},
 		{
-			name:    "Message with newlines",
-			message: "First line\nSecond line",
+			name:         "Message with newlines",
+			message:      "First line\nSecond line",
 			expectedJSON: `{"message":"First line\nSecond line"}`,
 		},
 		{
-			name:    "Empty message",
-			message: "",
+			name:         "Empty message",
+			message:      "",
 			expectedJSON: `{"message":""}`,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			agentInput := AgentInput{
 				Message: tt.message,
 			}
-			
+
 			inputJSON, err := json.Marshal(agentInput)
 			if err != nil {
 				t.Errorf("Failed to marshal agent input: %v", err)
 				return
 			}
-			
+
 			if string(inputJSON) != tt.expectedJSON {
 				t.Errorf("Agent input JSON = %q, want %q", string(inputJSON), tt.expectedJSON)
 			}
-			
+
 			// Verify we can unmarshal it back
 			var decoded AgentInput
 			if err := json.Unmarshal(inputJSON, &decoded); err != nil {
 				t.Errorf("Failed to unmarshal agent input: %v", err)
 				return
 			}
-			
+
 			if decoded.Message != tt.message {
 				t.Errorf("Decoded message = %q, want %q", decoded.Message, tt.message)
 			}
@@ -365,7 +365,6 @@ func TestParseRepoWithOrg(t *testing.T) {
 		})
 	}
 }
-
 
 func TestGitHubWebhookEventUnmarshal(t *testing.T) {
 	tests := []struct {

@@ -698,12 +698,12 @@ func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messag
 	agentInput := AgentInput{
 		Message: messageBody,
 	}
-	
+
 	inputJSON, err := json.Marshal(agentInput)
 	if err != nil {
 		return fmt.Errorf("failed to marshal agent input: %v", err)
 	}
-	
+
 	// Escape single quotes in the JSON for shell command
 	escapedJSON := strings.ReplaceAll(string(inputJSON), `'`, `'\''`)
 
