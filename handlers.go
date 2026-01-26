@@ -688,21 +688,11 @@ func handleMessageAction(ctx context.Context, rdb *redis.Client, slackClient *sl
 }
 
 func generateIssueTitleViaCopilot(ctx context.Context, rdb *redis.Client, messageBody, username, viewID string, hash string, config Config) error {
-	// Create structured input for issue-summariser agent
-	agentInput := AgentInput{
-		Message: messageBody,
-	}
+	// Escape single quotes in the message for shell command
+	escapedMessage := strings.ReplaceAll(messageBody, `'`, `'\''`)
 
-	inputJSON, err := json.Marshal(agentInput)
-	if err != nil {
-		return fmt.Errorf("failed to marshal agent input: %v", err)
-	}
-
-	// Escape single quotes in the JSON for shell command
-	escapedJSON := strings.ReplaceAll(string(inputJSON), `'`, `'\''`)
-
-	// Build the copilot command with structured JSON input
-	copilotCmd := fmt.Sprintf("copilot --model gpt-4.1 --agent issue-summariser --prompt '%s'", escapedJSON)
+	// Build the issue-summariser command with the message as argument
+	copilotCmd := fmt.Sprintf("issue-summariser '%s'", escapedMessage)
 
 	// Create Poppit command message with metadata including view_id
 	poppitCmd := PoppitCommand{

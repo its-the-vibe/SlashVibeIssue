@@ -130,7 +130,3 @@ type TitleGenerationOutput struct {
 	Title   string `json:"title"`
 	Prompt  string `json:"prompt"`
 }
-
-type AgentInput struct {
-	Message string `json:"message"`
-}
