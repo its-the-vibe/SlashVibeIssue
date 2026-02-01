@@ -55,7 +55,8 @@ Environment variables:
 | `REDIS_REACTION_CHANNEL` | `slack-relay-reaction-added` | Channel for emoji reaction events |
 | `REDIS_MESSAGE_ACTION_CHANNEL` | `slack-relay-message-action` | Channel for message shortcut events |
 | `REDIS_SLACKLINER_LIST` | `slack_messages` | Redis list for SlackLiner messages |
-| `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution |
+| `REDIS_POPPIT_LIST` | `poppit:commands` | Redis list for Poppit command execution (short-running tasks) |
+| `REDIS_POPPIT_BUILDER_LIST` | `poppit:build-commands` | Redis list for Poppit builder queue (long-running operations like issue sanitisation) |
 | `REDIS_POPPIT_OUTPUT_CHANNEL` | `poppit:command-output` | Redis channel for Poppit command output |
 | `REDIS_GITHUB_WEBHOOK_CHANNEL` | `github-webhook-issues` | Redis channel for GitHub webhook events |
 | `REDIS_SLACK_REACTIONS_LIST` | `slack_reactions` | Redis list for SlackLiner reactions |

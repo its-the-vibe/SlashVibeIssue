@@ -16,6 +16,7 @@ type Config struct {
 	RedisMessageActionChannel  string
 	RedisSlackLinerList        string
 	RedisPoppitList            string
+	RedisPoppitBuilderList     string
 	RedisPoppitOutputChannel   string
 	RedisGitHubWebhookChannel  string
 	RedisSlackReactionsList    string
@@ -42,6 +43,7 @@ func loadConfig() Config {
 		RedisMessageActionChannel:  getEnv("REDIS_MESSAGE_ACTION_CHANNEL", "slack-relay-message-action"),
 		RedisSlackLinerList:        getEnv("REDIS_SLACKLINER_LIST", "slack_messages"),
 		RedisPoppitList:            getEnv("REDIS_POPPIT_LIST", "poppit:commands"),
+		RedisPoppitBuilderList:     getEnv("REDIS_POPPIT_BUILDER_LIST", "poppit:build-commands"),
 		RedisPoppitOutputChannel:   getEnv("REDIS_POPPIT_OUTPUT_CHANNEL", "poppit:command-output"),
 		RedisGitHubWebhookChannel:  getEnv("REDIS_GITHUB_WEBHOOK_CHANNEL", "github-webhook-issues"),
 		RedisSlackReactionsList:    getEnv("REDIS_SLACK_REACTIONS_LIST", "slack_reactions"),
