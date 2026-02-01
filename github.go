@@ -254,12 +254,12 @@ func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string
 		return fmt.Errorf("failed to marshal Poppit command: %v", err)
 	}
 
-	// Push command to Poppit list
-	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	// Push command to Poppit builder list for long-running operations
+	err = rdb.RPush(ctx, config.RedisPoppitBuilderList, payload).Err()
 	if err != nil {
-		return fmt.Errorf("failed to push command to Poppit: %v", err)
+		return fmt.Errorf("failed to push command to Poppit builder queue: %v", err)
 	}
 
-	Debug("Issue sanitisation command sent to Poppit for issue: %s", issueURL)
+	Debug("Issue sanitisation command sent to Poppit builder queue for issue: %s", issueURL)
 	return nil
 }
