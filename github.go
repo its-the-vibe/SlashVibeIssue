@@ -216,3 +216,50 @@ func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo
 	Debug("Copilot assignment command sent to Poppit for issue: %s", issueURL)
 	return nil
 }
+
+func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+	// Parse the repository to get full org/repo format
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+
+	// Extract repository name without org for directory construction
+	parts := strings.Split(repoFullName, "/")
+	var repoName string
+	if len(parts) >= 2 {
+		repoName = parts[1]
+	} else {
+		repoName = repoFullName
+	}
+
+	// Construct repoWorkingDir, handling org name duplication
+	// Use the repository name without org prefix in the working directory
+	repoWorkingDir := fmt.Sprintf("%s/%s", config.WorkingDir, repoName)
+
+	// Build the issue-sanitiser command
+	issueCmd := fmt.Sprintf("issue-sanitiser %s", issueURL)
+
+	// Create Poppit command message
+	poppitCmd := PoppitCommand{
+		Repo:     repoFullName,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-sanitise",
+		Dir:      repoWorkingDir,
+		Commands: []string{issueCmd},
+		Metadata: map[string]interface{}{
+			"issueURL": issueURL,
+		},
+	}
+
+	payload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
+	}
+
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	Debug("Issue sanitisation command sent to Poppit for issue: %s", issueURL)
+	return nil
+}

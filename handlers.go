@@ -320,8 +320,8 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 	}
 
-	// Only handle sparkles emoji
-	if reaction.Event.Reaction != "sparkles" {
+	// Only handle sparkles or ticket emoji
+	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" {
 		return
 	}
 
@@ -330,7 +330,7 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		return
 	}
 
-	Info("Received sparkles reaction from user %s on message %s", reaction.Event.User, reaction.Event.Item.Ts)
+	Info("Received %s reaction from user %s on message %s", reaction.Event.Reaction, reaction.Event.User, reaction.Event.Item.Ts)
 
 	// Fetch the message from Slack to get metadata
 	historyParams := &slack.GetConversationHistoryParameters{
@@ -391,21 +391,41 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		return
 	}
 
-	if assignedToCopilot {
-		Debug("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)
-		return
+	// Handle different reactions
+	if reaction.Event.Reaction == "sparkles" {
+		if assignedToCopilot {
+			Debug("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)
+			return
+		}
+
+		Info("Assigning issue to Copilot: %s", issueURL)
+
+		// Assign issue to Copilot
+		err = assignIssueToCopilot(ctx, rdb, issueURL, repository, config)
+		if err != nil {
+			Error("Error assigning issue to Copilot: %v", err)
+			return
+		}
+
+		Info("Successfully assigned issue to Copilot: %s", issueURL)
+	} else if reaction.Event.Reaction == "ticket" {
+		// Handle issue sanitisation
+		if repository == "" || assignedToCopilot {
+			Debug("Skipping sanitisation: repository=%s, assignedToCopilot=%v", repository, assignedToCopilot)
+			return
+		}
+
+		Info("Triggering issue sanitisation for: %s", issueURL)
+
+		// Trigger issue sanitisation
+		err = sanitiseIssue(ctx, rdb, issueURL, repository, config)
+		if err != nil {
+			Error("Error sanitising issue: %v", err)
+			return
+		}
+
+		Info("Successfully triggered issue sanitisation: %s", issueURL)
 	}
-
-	Info("Assigning issue to Copilot: %s", issueURL)
-
-	// Assign issue to Copilot
-	err = assignIssueToCopilot(ctx, rdb, issueURL, repository, config)
-	if err != nil {
-		Error("Error assigning issue to Copilot: %v", err)
-		return
-	}
-
-	Info("Successfully assigned issue to Copilot: %s", issueURL)
 }
 
 func subscribeToGitHubWebhooks(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
