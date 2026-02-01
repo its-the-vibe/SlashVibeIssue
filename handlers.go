@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	issueClosedReactionEmoji   = "cat2"
-	issueAssignedReactionEmoji = "sparkles"
-	issueClosedTTLSeconds      = 86400 // 24 hours
-	issueCreatedEventType      = "issue_created"
-	copilotAssigneeName        = "Copilot"
+	issueClosedReactionEmoji    = "cat2"
+	issueAssignedReactionEmoji  = "sparkles"
+	issueSanitisedReactionEmoji = "ticket"
+	issueClosedTTLSeconds       = 86400 // 24 hours
+	issueCreatedEventType       = "issue_created"
+	copilotAssigneeName         = "Copilot"
 )
 
 func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
@@ -224,6 +225,12 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 	// Handle title generation output
 	if output.Type == "slash-vibe-issue-ticket-title" {
 		handleTitleGenerationOutput(ctx, slackClient, output, config)
+		return
+	}
+
+	// Handle issue sanitisation output
+	if output.Type == "slash-vibe-issue-sanitise" {
+		handleIssueSanitisationOutput(ctx, rdb, slackClient, output, config)
 		return
 	}
 
@@ -802,4 +809,46 @@ func handleTitleGenerationOutput(ctx context.Context, slackClient *slack.Client,
 	}
 
 	Debug("Modal updated successfully for user %s", username)
+}
+
+func handleIssueSanitisationOutput(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, output PoppitOutput, config Config) {
+	Debug("Received Poppit output for issue sanitisation")
+
+	// Extract metadata
+	metadata := output.Metadata
+	if metadata == nil {
+		Warn("No metadata in Poppit output for issue sanitisation")
+		return
+	}
+
+	issueURL, _ := metadata["issueURL"].(string)
+	if issueURL == "" {
+		Warn("Missing issueURL in metadata for issue sanitisation")
+		return
+	}
+
+	Info("Issue sanitisation completed for: %s", issueURL)
+
+	// Find the confirmation message with matching issue URL
+	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
+	if err != nil {
+		Error("Error finding message by issue URL: %v", err)
+		return
+	}
+
+	if channelID == "" || messageTs == "" {
+		Debug("No message found for issue URL: %s", issueURL)
+		return
+	}
+
+	Debug("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
+
+	// Send :ticket: reaction to SlackLiner
+	err = sendReactionToSlackLiner(ctx, rdb, issueSanitisedReactionEmoji, channelID, messageTs, config)
+	if err != nil {
+		Error("Error sending reaction: %v", err)
+		return
+	}
+
+	Info("Sent %s reaction for sanitised issue: %s", issueSanitisedReactionEmoji, issueURL)
 }

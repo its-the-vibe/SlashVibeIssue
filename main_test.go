@@ -470,3 +470,86 @@ func TestSanitiseIssueRepoWorkingDir(t *testing.T) {
 	}
 }
 
+func TestPoppitOutputUnmarshalIssueSanitisation(t *testing.T) {
+	tests := []struct {
+		name             string
+		jsonPayload      string
+		expectedType     string
+		expectedIssueURL string
+		expectError      bool
+	}{
+		{
+			name: "Issue sanitisation output",
+			jsonPayload: `{
+"type": "slash-vibe-issue-sanitise",
+"command": "issue-sanitiser https://github.com/org/repo/issues/42",
+"output": "Issue sanitised successfully",
+"metadata": {
+"issueURL": "https://github.com/org/repo/issues/42"
+}
+}`,
+			expectedType:     "slash-vibe-issue-sanitise",
+			expectedIssueURL: "https://github.com/org/repo/issues/42",
+			expectError:      false,
+		},
+		{
+			name: "Issue sanitisation output with different issue",
+			jsonPayload: `{
+"type": "slash-vibe-issue-sanitise",
+"command": "issue-sanitiser https://github.com/different-org/different-repo/issues/123",
+"output": "Sanitisation complete",
+"metadata": {
+"issueURL": "https://github.com/different-org/different-repo/issues/123"
+}
+}`,
+			expectedType:     "slash-vibe-issue-sanitise",
+			expectedIssueURL: "https://github.com/different-org/different-repo/issues/123",
+			expectError:      false,
+		},
+		{
+			name:        "Invalid JSON",
+			jsonPayload: `{"invalid json"`,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output PoppitOutput
+			err := json.Unmarshal([]byte(tt.jsonPayload), &output)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if output.Type != tt.expectedType {
+				t.Errorf("Type = %q, want %q", output.Type, tt.expectedType)
+			}
+
+			// Check metadata
+			if output.Metadata == nil {
+				t.Errorf("Expected metadata to be present")
+				return
+			}
+
+			issueURL, ok := output.Metadata["issueURL"].(string)
+			if !ok {
+				t.Errorf("Expected issueURL in metadata")
+				return
+			}
+
+			if issueURL != tt.expectedIssueURL {
+				t.Errorf("issueURL = %q, want %q", issueURL, tt.expectedIssueURL)
+			}
+		})
+	}
+}
+
