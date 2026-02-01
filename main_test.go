@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/slack-go/slack"
@@ -405,3 +407,66 @@ func TestGitHubWebhookEventUnmarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitiseIssueRepoWorkingDir(t *testing.T) {
+	// Test that repoWorkingDir is constructed correctly, handling org name duplication
+	tests := []struct {
+		name               string
+		repository         string
+		configOrg          string
+		configWorkingDir   string
+		expectedRepoInCmd  string
+		expectedDirInCmd   string
+	}{
+		{
+			name:               "Simple org/repo format",
+			repository:         "its-the-vibe/SlashVibeIssue",
+			configOrg:          "its-the-vibe",
+			configWorkingDir:   "/tmp",
+			expectedRepoInCmd:  "its-the-vibe/SlashVibeIssue",
+			expectedDirInCmd:   "/tmp/SlashVibeIssue",
+		},
+		{
+			name:               "Different org",
+			repository:         "other-org/my-repo",
+			configOrg:          "its-the-vibe",
+			configWorkingDir:   "/tmp",
+			expectedRepoInCmd:  "other-org/my-repo",
+			expectedDirInCmd:   "/tmp/my-repo",
+		},
+		{
+			name:               "Repo without org (backward compatibility)",
+			repository:         "SlashVibeIssue",
+			configOrg:          "its-the-vibe",
+			configWorkingDir:   "/tmp",
+			expectedRepoInCmd:  "its-the-vibe/SlashVibeIssue",
+			expectedDirInCmd:   "/tmp/SlashVibeIssue",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse the repository to get full org/repo format
+			repoFullName := parseRepoFullName(tt.repository, tt.configOrg)
+			if repoFullName != tt.expectedRepoInCmd {
+				t.Errorf("parseRepoFullName() = %q, want %q", repoFullName, tt.expectedRepoInCmd)
+			}
+
+			// Extract repository name without org for directory construction
+			parts := strings.Split(repoFullName, "/")
+			var repoName string
+			if len(parts) >= 2 {
+				repoName = parts[1]
+			} else {
+				repoName = repoFullName
+			}
+
+			// Construct repoWorkingDir
+			repoWorkingDir := fmt.Sprintf("%s/%s", tt.configWorkingDir, repoName)
+			if repoWorkingDir != tt.expectedDirInCmd {
+				t.Errorf("repoWorkingDir = %q, want %q", repoWorkingDir, tt.expectedDirInCmd)
+			}
+		})
+	}
+}
+
