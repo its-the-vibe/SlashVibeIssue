@@ -821,9 +821,13 @@ func handleIssueSanitisationOutput(ctx context.Context, rdb *redis.Client, slack
 		return
 	}
 
-	issueURL, _ := metadata["issueURL"].(string)
+	issueURL, ok := metadata["issueURL"].(string)
+	if !ok {
+		Warn("issueURL in metadata is not a string for issue sanitisation")
+		return
+	}
 	if issueURL == "" {
-		Warn("Missing issueURL in metadata for issue sanitisation")
+		Warn("issueURL in metadata is empty for issue sanitisation")
 		return
 	}
 
