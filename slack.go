@@ -70,6 +70,21 @@ func createIssueModal(initialTitle, initialDescription string, preselectCopilot 
 	)
 	projectCheckboxElement.InitialOptions = []*slack.OptionBlockObject{projectOption}
 
+	// Create sanitize issue checkbox option
+	sanitizeOption := &slack.OptionBlockObject{
+		Text: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "Sanitise issue on creation",
+		},
+		Value: "true",
+	}
+
+	// Create sanitize checkbox element
+	sanitizeCheckboxElement := slack.NewCheckboxGroupsBlockElement(
+		"sanitise_issue",
+		sanitizeOption,
+	)
+
 	return slack.ModalViewRequest{
 		Type:       slack.VTModal,
 		CallbackID: "create_github_issue_modal",
@@ -135,6 +150,7 @@ func createIssueModal(initialTitle, initialDescription string, preselectCopilot 
 						ElementSet: []slack.BlockElement{
 							checkboxElement,
 							projectCheckboxElement,
+							sanitizeCheckboxElement,
 						},
 					},
 				},

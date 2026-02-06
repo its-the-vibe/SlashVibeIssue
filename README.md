@@ -12,6 +12,7 @@ SlashVibeIssue is a Go service that listens for Slack slash commands via Redis a
 - 🔄 Redis pub/sub for receiving Slack commands and view submissions
 - 🎫 Message shortcuts with AI-generated issue titles via Copilot
 - ✨ Emoji reaction support to assign issues to Copilot after creation
+- 🧹 Automatic issue sanitization checkbox to improve issue quality on creation
 - 🐙 Poppit integration for executing GitHub CLI commands
 - ✅ Automatic confirmation messages via SlackLiner
 - 🐱 Auto-react to issue messages when issues are closed with :cat2: emoji
@@ -143,9 +144,12 @@ docker-compose up
    - Enter issue title
    - Enter issue description
    - Optionally check "Assign to Copilot"
+   - Optionally check "Sanitise issue on creation" to automatically improve issue quality
    - "Add to project" checkbox is checked by default
 3. Click "Create Issue"
 4. Confirmation message appears in the configured confirmation channel
+
+**Note on issue sanitization:** When the "Sanitise issue on creation" checkbox is selected, the issue-sanitiser tool will automatically run after the issue is created to improve formatting, add context, and enhance the issue description. This feature is only available for issues not assigned to Copilot (as Copilot-assigned issues are handled by Copilot itself).
 
 ### Creating an Issue from a Message (AI-Generated Title)
 
@@ -175,6 +179,19 @@ After an issue is created, you can assign it to Copilot by reacting to the confi
 
 Note: The confirmation messages include metadata about the issue (URL, repository, assignment status) to support this feature.
 
+### Sanitising Issues via Emoji Reaction
+
+After an issue is created, you can manually trigger issue sanitization by reacting to the confirmation message with the 🎫 (`:ticket:`) emoji:
+
+1. React with 🎫 to any issue confirmation message
+2. The service will automatically run the issue-sanitiser tool to improve the issue
+3. Only works if:
+   - The issue was not assigned to Copilot during creation (Copilot handles its own issues)
+   - The reaction is from a human user (not a bot)
+   - The confirmation message has valid metadata
+
+Note: This is useful for issues created without the "Sanitise issue on creation" checkbox, or if you want to re-sanitise an issue later.
+
 ### Automatic Issue Close Handling
 
 When a GitHub issue is closed, the service automatically:
@@ -200,6 +217,7 @@ The service uses the callback ID `create_github_issue_modal` to identify submiss
 - Issue title (plain text input)
 - Issue description (multiline text input)
 - Copilot assignment checkbox
+- Sanitise issue on creation checkbox
 - Add to project checkbox (checked by default)
 
 ## License

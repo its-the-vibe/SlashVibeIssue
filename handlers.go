@@ -178,13 +178,25 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 		}
 	}
 
+	// Check if sanitise issue is selected
+	sanitiseIssue := false
+	if assignBlock, ok := values["assignment_block"]; ok {
+		if sanitiseData, ok := assignBlock["sanitise_issue"]; ok {
+			if sanitiseMap, ok := sanitiseData.(map[string]interface{}); ok {
+				if selectedOptions, ok := sanitiseMap["selected_options"].([]interface{}); ok {
+					sanitiseIssue = len(selectedOptions) > 0
+				}
+			}
+		}
+	}
+
 	if repo == "" || title == "" {
 		Warn("Missing required fields: repo or title")
 		return
 	}
 
 	// Create GitHub issue via Poppit
-	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, addToProject, submission.User.Username, config)
+	err := createGitHubIssue(ctx, rdb, repo, title, description, assignToCopilot, addToProject, sanitiseIssue, submission.User.Username, config)
 	if err != nil {
 		Error("Error creating GitHub issue: %v", err)
 		return
@@ -252,6 +264,7 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 	title, _ := metadata["title"].(string)
 	username, _ := metadata["username"].(string)
 	assignedToCopilot, _ := metadata["assignedToCopilot"].(bool)
+	shouldSanitiseIssue, _ := metadata["sanitiseIssue"].(bool)
 
 	if repo == "" || title == "" || username == "" {
 		Warn("Missing required metadata: repo=%s, title=%s, username=%s", repo, title, username)
@@ -280,6 +293,17 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 		err := addIssueToProject(ctx, rdb, issueURL, config)
 		if err != nil {
 			Error("Error adding issue to project: %v", err)
+		}
+	}
+
+	// Check if we should sanitise the issue (only if not assigned to Copilot)
+	if shouldSanitiseIssue && !assignedToCopilot {
+		Debug("Triggering automatic issue sanitisation")
+		err := sanitiseIssue(ctx, rdb, issueURL, repo, config)
+		if err != nil {
+			Error("Error triggering issue sanitisation: %v", err)
+		} else {
+			Info("Automatic issue sanitisation triggered for: %s", issueURL)
 		}
 	}
 
