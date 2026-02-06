@@ -685,5 +685,3 @@ func TestSanitisationOutputWithDeferredAssignment(t *testing.T) {
 		})
 	}
 }
-
-
