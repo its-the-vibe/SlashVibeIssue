@@ -672,19 +672,20 @@ func sendOrRemoveReaction(ctx context.Context, rdb *redis.Client, reaction, chan
 		Remove:   remove,
 	}
 
-	action := "add"
-	if remove {
-		action = "remove"
-	}
-
 	payload, err := json.Marshal(slackReaction)
 	if err != nil {
-		return fmt.Errorf("failed to marshal slack reaction %s: %v", action, err)
+		if remove {
+			return fmt.Errorf("failed to marshal slack reaction removal: %v", err)
+		}
+		return fmt.Errorf("failed to marshal slack reaction: %v", err)
 	}
 
 	err = rdb.RPush(ctx, config.RedisSlackReactionsList, payload).Err()
 	if err != nil {
-		return fmt.Errorf("failed to push reaction %s to Redis list: %v", action, err)
+		if remove {
+			return fmt.Errorf("failed to push reaction removal to Redis list: %v", err)
+		}
+		return fmt.Errorf("failed to push reaction to Redis list: %v", err)
 	}
 
 	return nil
