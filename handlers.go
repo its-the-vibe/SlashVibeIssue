@@ -297,7 +297,8 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 		}
 	}
 
-	// Check if we should sanitise the issue (only if not assigned to Copilot AND not deferring assignment)
+	// Check if we should sanitise the issue
+	// Only sanitise if not already assigned to Copilot (assignedToCopilot is false when deferring)
 	if shouldSanitiseIssue && !assignedToCopilot {
 		Debug("Triggering automatic issue sanitisation")
 		err := sanitiseIssue(ctx, rdb, issueURL, repo, deferCopilotAssignment, config)
