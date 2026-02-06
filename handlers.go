@@ -11,12 +11,13 @@ import (
 )
 
 const (
-	issueClosedReactionEmoji    = "cat2"
-	issueAssignedReactionEmoji  = "sparkles"
-	issueSanitisedReactionEmoji = "ticket"
-	issueClosedTTLSeconds       = 86400 // 24 hours
-	issueCreatedEventType       = "issue_created"
-	copilotAssigneeName         = "Copilot"
+	issueClosedReactionEmoji     = "cat2"
+	issueAssignedReactionEmoji   = "sparkles"
+	issueSanitisedReactionEmoji  = "ticket"
+	issueSanitisingReactionEmoji = "brain"
+	issueClosedTTLSeconds        = 86400 // 24 hours
+	issueCreatedEventType        = "issue_created"
+	copilotAssigneeName          = "Copilot"
 )
 
 func subscribeToSlashCommands(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, config Config) {
@@ -299,7 +300,23 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 	// Check if we should sanitise the issue (only if not assigned to Copilot)
 	if shouldSanitiseIssue && !assignedToCopilot {
 		Debug("Triggering automatic issue sanitisation")
-		err := sanitiseIssue(ctx, rdb, issueURL, repo, config)
+		
+		// Find the confirmation message to add brain reaction
+		channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
+		if err != nil {
+			Error("Error finding message for brain reaction: %v", err)
+		} else if channelID != "" && messageTs != "" {
+			// Add :brain: reaction to indicate sanitisation is starting
+			err = sendReactionToSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, channelID, messageTs, config)
+			if err != nil {
+				Error("Error sending brain reaction: %v", err)
+			} else {
+				Debug("Sent %s reaction for sanitisation start", issueSanitisingReactionEmoji)
+			}
+		}
+		
+		// Trigger issue sanitisation
+		err = sanitiseIssue(ctx, rdb, issueURL, repo, config)
 		if err != nil {
 			Error("Error triggering issue sanitisation: %v", err)
 		} else {
@@ -449,6 +466,14 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 
 		Info("Triggering issue sanitisation for: %s", issueURL)
+
+		// Add :brain: reaction to indicate sanitisation is starting
+		err = sendReactionToSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, reaction.Event.Item.Channel, reaction.Event.Item.Ts, config)
+		if err != nil {
+			Error("Error sending brain reaction: %v", err)
+		} else {
+			Debug("Sent %s reaction for sanitisation start", issueSanitisingReactionEmoji)
+		}
 
 		// Trigger issue sanitisation
 		err = sanitiseIssue(ctx, rdb, issueURL, repository, config)
@@ -636,6 +661,7 @@ func sendReactionToSlackLiner(ctx context.Context, rdb *redis.Client, reaction, 
 		Reaction: reaction,
 		Channel:  channel,
 		Ts:       ts,
+		Remove:   false,
 	}
 
 	payload, err := json.Marshal(slackReaction)
@@ -646,6 +672,27 @@ func sendReactionToSlackLiner(ctx context.Context, rdb *redis.Client, reaction, 
 	err = rdb.RPush(ctx, config.RedisSlackReactionsList, payload).Err()
 	if err != nil {
 		return fmt.Errorf("failed to push reaction to Redis list: %v", err)
+	}
+
+	return nil
+}
+
+func removeReactionFromSlackLiner(ctx context.Context, rdb *redis.Client, reaction, channel, ts string, config Config) error {
+	slackReaction := SlackReaction{
+		Reaction: reaction,
+		Channel:  channel,
+		Ts:       ts,
+		Remove:   true,
+	}
+
+	payload, err := json.Marshal(slackReaction)
+	if err != nil {
+		return fmt.Errorf("failed to marshal slack reaction removal: %v", err)
+	}
+
+	err = rdb.RPush(ctx, config.RedisSlackReactionsList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push reaction removal to Redis list: %v", err)
 	}
 
 	return nil
@@ -870,6 +917,14 @@ func handleIssueSanitisationOutput(ctx context.Context, rdb *redis.Client, slack
 	}
 
 	Debug("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
+
+	// Remove :brain: reaction
+	err = removeReactionFromSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, channelID, messageTs, config)
+	if err != nil {
+		Error("Error removing brain reaction: %v", err)
+	} else {
+		Debug("Removed %s reaction for sanitised issue", issueSanitisingReactionEmoji)
+	}
 
 	// Send :ticket: reaction to SlackLiner
 	err = sendReactionToSlackLiner(ctx, rdb, issueSanitisedReactionEmoji, channelID, messageTs, config)
