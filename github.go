@@ -33,7 +33,11 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 		ghCmd = fmt.Sprintf("%s --body '%s'", ghCmd, escapedDesc)
 	}
 
-	if assignToCopilot {
+	// Defer Copilot assignment if both sanitisation and copilot assignment are requested
+	deferCopilotAssignment := assignToCopilot && sanitiseIssue
+	
+	// Only assign Copilot immediately if not deferring
+	if assignToCopilot && !deferCopilotAssignment {
 		ghCmd = fmt.Sprintf("%s --assignee @copilot", ghCmd)
 	}
 
@@ -45,12 +49,13 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 		Dir:      config.WorkingDir,
 		Commands: []string{ghCmd},
 		Metadata: map[string]interface{}{
-			"repo":              repoFullName,
-			"title":             title,
-			"username":          username,
-			"addToProject":      addToProject,
-			"assignedToCopilot": assignToCopilot,
-			"sanitiseIssue":     sanitiseIssue,
+			"repo":                    repoFullName,
+			"title":                   title,
+			"username":                username,
+			"addToProject":            addToProject,
+			"assignedToCopilot":       assignToCopilot && !deferCopilotAssignment,
+			"sanitiseIssue":           sanitiseIssue,
+			"deferCopilotAssignment":  deferCopilotAssignment,
 		},
 	}
 
@@ -218,7 +223,7 @@ func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo
 	return nil
 }
 
-func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string, deferCopilotAssignment bool, config Config) error {
 	// Parse the repository to get full org/repo format
 	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 
@@ -246,7 +251,9 @@ func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string
 		Dir:      repoWorkingDir,
 		Commands: []string{issueCmd},
 		Metadata: map[string]interface{}{
-			"issueURL": issueURL,
+			"issueURL":               issueURL,
+			"deferCopilotAssignment": deferCopilotAssignment,
+			"repository":             repoFullName,
 		},
 	}
 

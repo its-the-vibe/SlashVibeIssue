@@ -266,6 +266,7 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 	username, _ := metadata["username"].(string)
 	assignedToCopilot, _ := metadata["assignedToCopilot"].(bool)
 	shouldSanitiseIssue, _ := metadata["sanitiseIssue"].(bool)
+	deferCopilotAssignment, _ := metadata["deferCopilotAssignment"].(bool)
 
 	if repo == "" || title == "" || username == "" {
 		Warn("Missing required metadata: repo=%s, title=%s, username=%s", repo, title, username)
@@ -297,7 +298,8 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 		}
 	}
 
-	// Check if we should sanitise the issue (only if not assigned to Copilot)
+	// Check if we should sanitise the issue
+	// Only sanitise if not already assigned to Copilot (assignedToCopilot is false when deferring)
 	if shouldSanitiseIssue && !assignedToCopilot {
 		Debug("Triggering automatic issue sanitisation")
 
@@ -316,7 +318,7 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 		}
 
 		// Trigger issue sanitisation
-		err := sanitiseIssue(ctx, rdb, issueURL, repo, config)
+		err := sanitiseIssue(ctx, rdb, issueURL, repo, deferCopilotAssignment, config)
 		if err != nil {
 			Error("Error triggering issue sanitisation: %v", err)
 		} else {
@@ -475,8 +477,8 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 			Debug("Sent %s reaction for sanitisation start", issueSanitisingReactionEmoji)
 		}
 
-		// Trigger issue sanitisation
-		err = sanitiseIssue(ctx, rdb, issueURL, repository, config)
+		// Trigger issue sanitisation (no deferred copilot assignment for manual sanitisation)
+		err = sanitiseIssue(ctx, rdb, issueURL, repository, false, config)
 		if err != nil {
 			Error("Error sanitising issue: %v", err)
 			return
@@ -896,6 +898,23 @@ func handleIssueSanitisationOutput(ctx context.Context, rdb *redis.Client, slack
 	}
 
 	Info("Issue sanitisation completed for: %s", issueURL)
+
+	// Check if we need to assign to Copilot after sanitisation
+	deferCopilotAssignment, _ := metadata["deferCopilotAssignment"].(bool)
+	if deferCopilotAssignment {
+		repository, _ := metadata["repository"].(string)
+		if repository == "" {
+			Warn("Repository metadata missing for deferred Copilot assignment")
+		} else {
+			Info("Assigning issue to Copilot after sanitisation: %s", issueURL)
+			err := assignIssueToCopilot(ctx, rdb, issueURL, repository, config)
+			if err != nil {
+				Error("Error assigning issue to Copilot after sanitisation: %v", err)
+			} else {
+				Info("Successfully assigned issue to Copilot after sanitisation: %s", issueURL)
+			}
+		}
+	}
 
 	// Find the confirmation message with matching issue URL
 	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
