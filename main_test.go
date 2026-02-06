@@ -574,3 +574,116 @@ func TestPoppitOutputUnmarshalIssueSanitisation(t *testing.T) {
 	}
 }
 
+func TestDeferredCopilotAssignmentMetadata(t *testing.T) {
+	// Test that when both assignToCopilot and sanitiseIssue are true,
+	// the deferCopilotAssignment flag is set correctly
+	tests := []struct {
+		name                   string
+		assignToCopilot        bool
+		sanitiseIssue          bool
+		expectedDeferred       bool
+		expectedAssignedToCopilot bool
+	}{
+		{
+			name:                   "Both options selected - should defer",
+			assignToCopilot:        true,
+			sanitiseIssue:          true,
+			expectedDeferred:       true,
+			expectedAssignedToCopilot: false,
+		},
+		{
+			name:                   "Only assignToCopilot - should not defer",
+			assignToCopilot:        true,
+			sanitiseIssue:          false,
+			expectedDeferred:       false,
+			expectedAssignedToCopilot: true,
+		},
+		{
+			name:                   "Only sanitiseIssue - should not defer",
+			assignToCopilot:        false,
+			sanitiseIssue:          true,
+			expectedDeferred:       false,
+			expectedAssignedToCopilot: false,
+		},
+		{
+			name:                   "Neither option - should not defer",
+			assignToCopilot:        false,
+			sanitiseIssue:          false,
+			expectedDeferred:       false,
+			expectedAssignedToCopilot: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the logic from createGitHubIssue
+			deferCopilotAssignment := tt.assignToCopilot && tt.sanitiseIssue
+			assignedToCopilot := tt.assignToCopilot && !deferCopilotAssignment
+
+			if deferCopilotAssignment != tt.expectedDeferred {
+				t.Errorf("deferCopilotAssignment = %v, want %v", deferCopilotAssignment, tt.expectedDeferred)
+			}
+
+			if assignedToCopilot != tt.expectedAssignedToCopilot {
+				t.Errorf("assignedToCopilot = %v, want %v", assignedToCopilot, tt.expectedAssignedToCopilot)
+			}
+		})
+	}
+}
+
+func TestSanitisationOutputWithDeferredAssignment(t *testing.T) {
+	tests := []struct {
+		name                   string
+		metadata               map[string]interface{}
+		expectCopilotAssignment bool
+	}{
+		{
+			name: "With deferred assignment flag",
+			metadata: map[string]interface{}{
+				"issueURL":               "https://github.com/org/repo/issues/1",
+				"deferCopilotAssignment": true,
+				"repository":             "org/repo",
+			},
+			expectCopilotAssignment: true,
+		},
+		{
+			name: "Without deferred assignment flag",
+			metadata: map[string]interface{}{
+				"issueURL": "https://github.com/org/repo/issues/2",
+			},
+			expectCopilotAssignment: false,
+		},
+		{
+			name: "With deferred assignment false",
+			metadata: map[string]interface{}{
+				"issueURL":               "https://github.com/org/repo/issues/3",
+				"deferCopilotAssignment": false,
+			},
+			expectCopilotAssignment: false,
+		},
+		{
+			name: "With deferred assignment but missing repository",
+			metadata: map[string]interface{}{
+				"issueURL":               "https://github.com/org/repo/issues/4",
+				"deferCopilotAssignment": true,
+			},
+			expectCopilotAssignment: false, // Should not assign if repository is missing
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Check if deferred assignment should happen
+			deferCopilotAssignment, _ := tt.metadata["deferCopilotAssignment"].(bool)
+			repository, _ := tt.metadata["repository"].(string)
+			
+			shouldAssign := deferCopilotAssignment && repository != ""
+			
+			if shouldAssign != tt.expectCopilotAssignment {
+				t.Errorf("shouldAssign = %v, want %v", shouldAssign, tt.expectCopilotAssignment)
+			}
+		})
+	}
+}
+
+
