@@ -657,41 +657,34 @@ func findMessageByIssueURL(ctx context.Context, slackClient *slack.Client, issue
 }
 
 func sendReactionToSlackLiner(ctx context.Context, rdb *redis.Client, reaction, channel, ts string, config Config) error {
-	slackReaction := SlackReaction{
-		Reaction: reaction,
-		Channel:  channel,
-		Ts:       ts,
-	}
-
-	payload, err := json.Marshal(slackReaction)
-	if err != nil {
-		return fmt.Errorf("failed to marshal slack reaction: %v", err)
-	}
-
-	err = rdb.RPush(ctx, config.RedisSlackReactionsList, payload).Err()
-	if err != nil {
-		return fmt.Errorf("failed to push reaction to Redis list: %v", err)
-	}
-
-	return nil
+	return sendOrRemoveReaction(ctx, rdb, reaction, channel, ts, false, config)
 }
 
 func removeReactionFromSlackLiner(ctx context.Context, rdb *redis.Client, reaction, channel, ts string, config Config) error {
+	return sendOrRemoveReaction(ctx, rdb, reaction, channel, ts, true, config)
+}
+
+func sendOrRemoveReaction(ctx context.Context, rdb *redis.Client, reaction, channel, ts string, remove bool, config Config) error {
 	slackReaction := SlackReaction{
 		Reaction: reaction,
 		Channel:  channel,
 		Ts:       ts,
-		Remove:   true,
+		Remove:   remove,
+	}
+
+	action := "add"
+	if remove {
+		action = "remove"
 	}
 
 	payload, err := json.Marshal(slackReaction)
 	if err != nil {
-		return fmt.Errorf("failed to marshal slack reaction removal: %v", err)
+		return fmt.Errorf("failed to marshal slack reaction %s: %v", action, err)
 	}
 
 	err = rdb.RPush(ctx, config.RedisSlackReactionsList, payload).Err()
 	if err != nil {
-		return fmt.Errorf("failed to push reaction removal to Redis list: %v", err)
+		return fmt.Errorf("failed to push reaction %s to Redis list: %v", action, err)
 	}
 
 	return nil
