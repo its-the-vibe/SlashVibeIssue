@@ -302,21 +302,21 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 		Debug("Triggering automatic issue sanitisation")
 		
 		// Find the confirmation message to add brain reaction
-		channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
-		if err != nil {
-			Error("Error finding message for brain reaction: %v", err)
+		channelID, messageTs, findErr := findMessageByIssueURL(ctx, slackClient, issueURL, config)
+		if findErr != nil {
+			Error("Error finding message for brain reaction: %v", findErr)
 		} else if channelID != "" && messageTs != "" {
 			// Add :brain: reaction to indicate sanitisation is starting
-			err = sendReactionToSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, channelID, messageTs, config)
-			if err != nil {
-				Error("Error sending brain reaction: %v", err)
+			reactionErr := sendReactionToSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, channelID, messageTs, config)
+			if reactionErr != nil {
+				Error("Error sending brain reaction: %v", reactionErr)
 			} else {
 				Debug("Sent %s reaction for sanitisation start", issueSanitisingReactionEmoji)
 			}
 		}
 		
 		// Trigger issue sanitisation
-		err = sanitiseIssue(ctx, rdb, issueURL, repo, config)
+		err := sanitiseIssue(ctx, rdb, issueURL, repo, config)
 		if err != nil {
 			Error("Error triggering issue sanitisation: %v", err)
 		} else {
@@ -468,9 +468,9 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		Info("Triggering issue sanitisation for: %s", issueURL)
 
 		// Add :brain: reaction to indicate sanitisation is starting
-		err = sendReactionToSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, reaction.Event.Item.Channel, reaction.Event.Item.Ts, config)
-		if err != nil {
-			Error("Error sending brain reaction: %v", err)
+		reactionErr := sendReactionToSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, reaction.Event.Item.Channel, reaction.Event.Item.Ts, config)
+		if reactionErr != nil {
+			Error("Error sending brain reaction: %v", reactionErr)
 		} else {
 			Debug("Sent %s reaction for sanitisation start", issueSanitisingReactionEmoji)
 		}
