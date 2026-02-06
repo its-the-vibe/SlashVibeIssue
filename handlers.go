@@ -300,7 +300,7 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 	// Check if we should sanitise the issue (only if not assigned to Copilot)
 	if shouldSanitiseIssue && !assignedToCopilot {
 		Debug("Triggering automatic issue sanitisation")
-		
+
 		// Find the confirmation message to add brain reaction
 		channelID, messageTs, findErr := findMessageByIssueURL(ctx, slackClient, issueURL, config)
 		if findErr != nil {
@@ -314,7 +314,7 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 				Debug("Sent %s reaction for sanitisation start", issueSanitisingReactionEmoji)
 			}
 		}
-		
+
 		// Trigger issue sanitisation
 		err := sanitiseIssue(ctx, rdb, issueURL, repo, config)
 		if err != nil {
