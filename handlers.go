@@ -661,7 +661,6 @@ func sendReactionToSlackLiner(ctx context.Context, rdb *redis.Client, reaction, 
 		Reaction: reaction,
 		Channel:  channel,
 		Ts:       ts,
-		Remove:   false,
 	}
 
 	payload, err := json.Marshal(slackReaction)
