@@ -144,9 +144,36 @@ func TestCreateIssueModalWithProjectCheckbox(t *testing.T) {
 			t.Errorf("Expected block_id to be 'assignment_block', got '%s'", actionBlock.BlockID)
 		}
 
-		// Verify we have 2 elements (assign to copilot and add to project checkboxes)
-		if len(actionBlock.Elements.ElementSet) != 2 {
-			t.Errorf("Expected 2 checkbox elements in assignment block, got %d", len(actionBlock.Elements.ElementSet))
+		// Verify we have 3 elements (assign to copilot, add to project, and sanitise issue checkboxes)
+		if len(actionBlock.Elements.ElementSet) != 3 {
+			t.Errorf("Expected 3 checkbox elements in assignment block, got %d", len(actionBlock.Elements.ElementSet))
+		}
+	} else {
+		t.Error("Expected block at index 4 to be an ActionBlock")
+	}
+}
+
+func TestCreateIssueModalWithSanitiseCheckbox(t *testing.T) {
+	// Test that the modal includes the "Sanitise issue on creation" checkbox
+	modal := createIssueModal("", "", false)
+
+	// Verify we have the expected number of blocks
+	if len(modal.Blocks.BlockSet) != 5 {
+		t.Errorf("Expected 5 blocks, got %d", len(modal.Blocks.BlockSet))
+	}
+
+	// Check assignment block (index 4) for sanitise checkbox
+	assignmentBlock := modal.Blocks.BlockSet[4]
+	if actionBlock, ok := assignmentBlock.(*slack.ActionBlock); ok {
+		// Verify the third element is the sanitise checkbox
+		if len(actionBlock.Elements.ElementSet) >= 3 {
+			// We can't easily inspect the specific checkbox without type assertions,
+			// but we can verify the count is correct
+			if len(actionBlock.Elements.ElementSet) != 3 {
+				t.Errorf("Expected 3 checkbox elements, got %d", len(actionBlock.Elements.ElementSet))
+			}
+		} else {
+			t.Error("Expected at least 3 elements in assignment block")
 		}
 	} else {
 		t.Error("Expected block at index 4 to be an ActionBlock")

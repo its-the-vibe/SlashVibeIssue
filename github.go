@@ -19,7 +19,7 @@ func parseRepoFullName(repo string, configOrg string) string {
 	return fmt.Sprintf("%s/%s", configOrg, repo)
 }
 
-func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot, addToProject bool, username string, config Config) error {
+func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, description string, assignToCopilot, addToProject, sanitiseIssue bool, username string, config Config) error {
 	// Parse org and repo from the repo parameter
 	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 
@@ -50,6 +50,7 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 			"username":          username,
 			"addToProject":      addToProject,
 			"assignedToCopilot": assignToCopilot,
+			"sanitiseIssue":     sanitiseIssue,
 		},
 	}
 
