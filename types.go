@@ -93,6 +93,7 @@ type SlackReaction struct {
 	Reaction string `json:"reaction"`
 	Channel  string `json:"channel"`
 	Ts       string `json:"ts"`
+	Remove   bool   `json:"remove,omitempty"` // If true, removes the reaction instead of adding it
 }
 
 type TimeBombMessage struct {
