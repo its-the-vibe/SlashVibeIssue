@@ -19,6 +19,6 @@ services:
       - AGENT_WORKING_DIR=${AGENT_WORKING_DIR:-/tmp/agent}
       - CONFIRMATION_CHANNEL_ID=${CONFIRMATION_CHANNEL_ID:-}
       - CONFIRMATION_TTL=${CONFIRMATION_TTL:-240h}
-    restart: unless-stopped
+    restart: on-failure:10
     extra_hosts:
       - "host.docker.internal:host-gateway"
