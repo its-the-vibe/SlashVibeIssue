@@ -17,6 +17,12 @@ type ViewSubmission struct {
 		State      struct {
 			Values map[string]map[string]interface{} `json:"values"`
 		} `json:"state"`
+		Blocks []struct {
+			BlockID string `json:"block_id"`
+			Element struct {
+				InitialValue string `json:"initial_value"`
+			} `json:"element"`
+		} `json:"blocks"`
 	} `json:"view"`
 	User struct {
 		ID       string `json:"id"`
