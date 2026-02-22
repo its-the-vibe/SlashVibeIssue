@@ -143,6 +143,17 @@ func handleViewSubmission(ctx context.Context, rdb *redis.Client, slackClient *s
 		}
 	}
 
+	// If title is empty from state (happens when initial_value was set via UpdateView
+	// and the user did not modify the field), fall back to initial_value from blocks
+	if title == "" {
+		for _, block := range submission.View.Blocks {
+			if block.BlockID == "title_block" {
+				title = block.Element.InitialValue
+				break
+			}
+		}
+	}
+
 	// Get description
 	var description string
 	if descBlock, ok := values["description_block"]; ok {

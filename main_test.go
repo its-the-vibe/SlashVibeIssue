@@ -631,6 +631,131 @@ func TestDeferredCopilotAssignmentMetadata(t *testing.T) {
 	}
 }
 
+func TestViewSubmissionTitleFallbackToInitialValue(t *testing.T) {
+	tests := []struct {
+		name          string
+		jsonPayload   string
+		expectedTitle string
+	}{
+		{
+			name: "Title null in state falls back to initial_value from blocks",
+			jsonPayload: `{
+				"type": "view_submission",
+				"view": {
+					"callback_id": "create_github_issue_modal",
+					"blocks": [
+						{
+							"block_id": "title_block",
+							"element": {
+								"initial_value": "Fix modal issue submission workflow"
+							}
+						}
+					],
+					"state": {
+						"values": {
+							"title_block": {
+								"issue_title": {
+									"type": "plain_text_input",
+									"value": null
+								}
+							}
+						}
+					}
+				},
+				"user": {"id": "U123", "username": "testuser"}
+			}`,
+			expectedTitle: "Fix modal issue submission workflow",
+		},
+		{
+			name: "Title in state takes precedence over initial_value",
+			jsonPayload: `{
+				"type": "view_submission",
+				"view": {
+					"callback_id": "create_github_issue_modal",
+					"blocks": [
+						{
+							"block_id": "title_block",
+							"element": {
+								"initial_value": "Original title"
+							}
+						}
+					],
+					"state": {
+						"values": {
+							"title_block": {
+								"issue_title": {
+									"type": "plain_text_input",
+									"value": "User modified title"
+								}
+							}
+						}
+					}
+				},
+				"user": {"id": "U123", "username": "testuser"}
+			}`,
+			expectedTitle: "User modified title",
+		},
+		{
+			name: "Empty blocks array returns empty string when title is null",
+			jsonPayload: `{
+				"type": "view_submission",
+				"view": {
+					"callback_id": "create_github_issue_modal",
+					"blocks": [],
+					"state": {
+						"values": {
+							"title_block": {
+								"issue_title": {
+									"type": "plain_text_input",
+									"value": null
+								}
+							}
+						}
+					}
+				},
+				"user": {"id": "U123", "username": "testuser"}
+			}`,
+			expectedTitle: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var submission ViewSubmission
+			if err := json.Unmarshal([]byte(tt.jsonPayload), &submission); err != nil {
+				t.Fatalf("Failed to unmarshal: %v", err)
+			}
+
+			values := submission.View.State.Values
+
+			// Replicate the title extraction logic from handleViewSubmission
+			var title string
+			if titleBlock, ok := values["title_block"]; ok {
+				if titleData, ok := titleBlock["issue_title"]; ok {
+					if titleMap, ok := titleData.(map[string]interface{}); ok {
+						if value, ok := titleMap["value"].(string); ok {
+							title = value
+						}
+					}
+				}
+			}
+
+			if title == "" {
+				for _, block := range submission.View.Blocks {
+					if block.BlockID == "title_block" {
+						title = block.Element.InitialValue
+						break
+					}
+				}
+			}
+
+			if title != tt.expectedTitle {
+				t.Errorf("title = %q, want %q", title, tt.expectedTitle)
+			}
+		})
+	}
+}
+
 func TestSanitisationOutputWithDeferredAssignment(t *testing.T) {
 	tests := []struct {
 		name                   string
