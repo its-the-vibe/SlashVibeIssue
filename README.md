@@ -1,5 +1,7 @@
 # SlashVibeIssue
 
+![CI](https://github.com/its-the-vibe/SlashVibeIssue/actions/workflows/ci.yaml/badge.svg)
+
 Slack Slash Command for creating a new GitHub issue
 
 ## Overview
@@ -93,6 +95,13 @@ export LOG_LEVEL=ERROR
 ```
 
 ## Building
+
+### Using Make
+```bash
+make build   # build the binary
+make test    # run tests
+make lint    # run golangci-lint (requires golangci-lint to be installed)
+```
 
 ### Local Build
 ```bash

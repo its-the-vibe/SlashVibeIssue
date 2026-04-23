@@ -810,3 +810,103 @@ func TestSanitisationOutputWithDeferredAssignment(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEnv(t *testing.T) {
+	t.Run("returns default when env var not set", func(t *testing.T) {
+		t.Setenv("TEST_VAR_MISSING", "")
+		result := getEnv("TEST_VAR_MISSING", "default_value")
+		if result != "default_value" {
+			t.Errorf("getEnv() = %q, want %q", result, "default_value")
+		}
+	})
+
+	t.Run("returns env var when set", func(t *testing.T) {
+		t.Setenv("TEST_VAR_SET", "custom_value")
+		result := getEnv("TEST_VAR_SET", "default_value")
+		if result != "custom_value" {
+			t.Errorf("getEnv() = %q, want %q", result, "custom_value")
+		}
+	})
+}
+
+func TestGetEnvAsInt(t *testing.T) {
+	tests := []struct {
+		name         string
+		envVal       string
+		defaultVal   string
+		expected     int
+	}{
+		{name: "valid integer from env", envVal: "42", defaultVal: "0", expected: 42},
+		{name: "empty env uses default", envVal: "", defaultVal: "10", expected: 10},
+		{name: "invalid env falls back to default", envVal: "not-a-number", defaultVal: "5", expected: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TEST_INT_VAR", tt.envVal)
+			result := getEnvAsInt("TEST_INT_VAR", tt.defaultVal)
+			if result != tt.expected {
+				t.Errorf("getEnvAsInt() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetEnvAsIntSeconds(t *testing.T) {
+	tests := []struct {
+		name       string
+		envVal     string
+		defaultVal string
+		expected   int
+	}{
+		{name: "plain integer", envVal: "3600", defaultVal: "0", expected: 3600},
+		{name: "duration string", envVal: "24h", defaultVal: "0", expected: 86400},
+		{name: "empty env uses default duration", envVal: "", defaultVal: "48h", expected: 172800},
+		{name: "empty env uses default int", envVal: "", defaultVal: "7200", expected: 7200},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TEST_DURATION_VAR", tt.envVal)
+			result := getEnvAsIntSeconds("TEST_DURATION_VAR", tt.defaultVal)
+			if result != tt.expected {
+				t.Errorf("getEnvAsIntSeconds() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLoadConfigDefaults(t *testing.T) {
+	// Unset any env vars that might interfere
+	for _, key := range []string{
+		"REDIS_ADDR", "REDIS_CHANNEL", "REDIS_VIEW_SUBMISSION_CHANNEL",
+		"REDIS_POPPIT_LIST", "REDIS_SLACKLINER_LIST", "WORKING_DIR",
+		"PROJECT_ID", "PROJECT_ORG", "LOG_LEVEL",
+	} {
+		t.Setenv(key, "")
+	}
+
+	cfg := loadConfig()
+
+	checks := []struct {
+		name     string
+		got      string
+		expected string
+	}{
+		{"RedisAddr", cfg.RedisAddr, "host.docker.internal:6379"},
+		{"RedisChannel", cfg.RedisChannel, "slack-commands"},
+		{"RedisViewSubmissionChannel", cfg.RedisViewSubmissionChannel, "slack-relay-view-submission"},
+		{"RedisPoppitList", cfg.RedisPoppitList, "poppit:commands"},
+		{"RedisSlackLinerList", cfg.RedisSlackLinerList, "slack_messages"},
+		{"WorkingDir", cfg.WorkingDir, "/tmp"},
+		{"ProjectID", cfg.ProjectID, "1"},
+		{"ProjectOrg", cfg.ProjectOrg, "its-the-vibe"},
+		{"LogLevel", cfg.LogLevel, "INFO"},
+	}
+
+	for _, c := range checks {
+		if c.got != c.expected {
+			t.Errorf("Config.%s = %q, want %q", c.name, c.got, c.expected)
+		}
+	}
+}

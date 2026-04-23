@@ -453,7 +453,8 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 	}
 
 	// Handle different reactions
-	if reaction.Event.Reaction == "sparkles" {
+	switch reaction.Event.Reaction {
+	case "sparkles":
 		if assignedToCopilot {
 			Debug("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)
 			return
@@ -469,7 +470,7 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 
 		Info("Successfully assigned issue to Copilot: %s", issueURL)
-	} else if reaction.Event.Reaction == "ticket" {
+	case "ticket":
 		// Handle issue sanitisation
 		// Skip if repository metadata is missing or issue is already assigned to Copilot
 		// (Copilot-assigned issues will be handled by Copilot itself)

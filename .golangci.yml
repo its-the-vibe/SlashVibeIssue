@@ -1,0 +1,11 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      # Ignore unhandled Close() errors in deferred calls — this is idiomatic Go.
+      exclude-functions:
+        - (io.Closer).Close
+        - (*github.com/redis/go-redis/v9.PubSub).Close
+        - (*github.com/redis/go-redis/v9.Client).Close
+        - (*github.com/redis/go-redis/v9.baseClient).Close

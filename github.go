@@ -139,7 +139,9 @@ func extractIssueNumber(issueURL string) int {
 	var issueNumber int
 	parts := strings.Split(issueURL, "/")
 	if len(parts) >= 7 {
-		fmt.Sscanf(parts[6], "%d", &issueNumber)
+		if _, err := fmt.Sscanf(parts[6], "%d", &issueNumber); err != nil {
+			return 0
+		}
 	}
 	return issueNumber
 }
