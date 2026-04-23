@@ -53,15 +53,6 @@ func logf(level LogLevel, format string, args ...interface{}) {
 	}
 }
 
-// logln logs a message at the specified level
-func logln(level LogLevel, args ...interface{}) {
-	if level >= currentLogLevel {
-		prefix := fmt.Sprintf("[%s] ", logLevelNames[level])
-		msg := fmt.Sprint(args...)
-		log.Println(prefix + msg)
-	}
-}
-
 // Debug logs a debug message (most verbose)
 func Debug(format string, args ...interface{}) {
 	logf(DEBUG, format, args...)
