@@ -7,18 +7,8 @@ services:
     image: slashvibeissue:latest
     container_name: slashvibeissue
     environment:
-      - REDIS_ADDR=${REDIS_ADDR:-host.docker.internal:6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_CHANNEL=${REDIS_CHANNEL:-slack-commands}
-      - REDIS_VIEW_SUBMISSION_CHANNEL=${REDIS_VIEW_SUBMISSION_CHANNEL:-slack-relay-view-submission}
-      - REDIS_POPPIT_LIST=${REDIS_POPPIT_LIST:-poppit:notifications}
-      - REDIS_POPPIT_BUILDER_LIST=${REDIS_POPPIT_BUILDER_LIST:-poppit:build-commands}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
-      - GITHUB_ORG=${GITHUB_ORG}
-      - WORKING_DIR=${WORKING_DIR:-/tmp}
-      - AGENT_WORKING_DIR=${AGENT_WORKING_DIR:-/tmp/agent}
-      - CONFIRMATION_CHANNEL_ID=${CONFIRMATION_CHANNEL_ID:-}
-      - CONFIRMATION_TTL=${CONFIRMATION_TTL:-240h}
     restart: on-failure:10
     extra_hosts:
       - "host.docker.internal:host-gateway"
