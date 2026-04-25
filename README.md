@@ -47,12 +47,36 @@ When a GitHub issue closed event is received, the service:
 
 ## Configuration
 
-Environment variables:
+SlashVibeIssue supports two complementary configuration methods:
+
+1. **Config file** (`config.yaml`) for non-secret, deployment-specific settings.
+2. **Environment variables** for secrets and any setting that overrides the config file.
+
+### Priority order
+
+For every non-secret setting the lookup order is:
+
+1. Environment variable (highest priority)
+2. `config.yaml` value
+3. Hard-coded default (lowest priority)
+
+Secrets (`REDIS_PASSWORD` and `SLACK_BOT_TOKEN`) are **only** read from environment variables and are never written to the config file.
+
+### Config file quick-start
+
+```bash
+cp config.sample.yaml config.yaml
+# Edit config.yaml with your values
+```
+
+`config.yaml` is listed in `.gitignore` so it will not be committed accidentally. See [`config.sample.yaml`](config.sample.yaml) for all available fields and their defaults.
+
+### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `REDIS_ADDR` | `host.docker.internal:6379` | Redis server address |
-| `REDIS_PASSWORD` | _(empty)_ | Redis password |
+| `REDIS_PASSWORD` | _(empty)_ | Redis password (**secret — env var only**) |
 | `REDIS_CHANNEL` | `slack-commands` | Channel for slash commands |
 | `REDIS_VIEW_SUBMISSION_CHANNEL` | `slack-relay-view-submission` | Channel for view submissions |
 | `REDIS_REACTION_CHANNEL` | `slack-relay-reaction-added` | Channel for emoji reaction events |
@@ -64,7 +88,7 @@ Environment variables:
 | `REDIS_GITHUB_WEBHOOK_CHANNEL` | `github-webhook-issues` | Redis channel for GitHub webhook events |
 | `REDIS_SLACK_REACTIONS_LIST` | `slack_reactions` | Redis list for SlackLiner reactions |
 | `REDIS_TIMEBOMB_CHANNEL` | `timebomb-messages` | Redis channel for TimeBomb TTL updates |
-| `SLACK_BOT_TOKEN` | _(required)_ | Slack bot token |
+| `SLACK_BOT_TOKEN` | _(required, **secret**)_ | Slack bot token |
 | `GITHUB_ORG` | _(required)_ | GitHub organization name |
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |
 | `CONFIRMATION_CHANNEL_ID` | _(required)_ | Slack channel ID for confirmation messages |

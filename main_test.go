@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -908,5 +910,129 @@ func TestLoadConfigDefaults(t *testing.T) {
 		if c.got != c.expected {
 			t.Errorf("Config.%s = %q, want %q", c.name, c.got, c.expected)
 		}
+	}
+}
+
+func TestLoadFileConfig(t *testing.T) {
+	t.Run("returns empty config when file does not exist", func(t *testing.T) {
+		fc := loadFileConfig("/nonexistent/path/config.yaml")
+		if fc.RedisAddr != "" || fc.LogLevel != "" {
+			t.Errorf("expected empty fileConfig for missing file, got %+v", fc)
+		}
+	})
+
+	t.Run("parses valid YAML file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "config.yaml")
+		content := `
+redis_addr: "redis.example.com:6379"
+redis_channel: "custom-channel"
+log_level: "DEBUG"
+confirmation_search_limit: "50"
+`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("failed to write temp config: %v", err)
+		}
+
+		fc := loadFileConfig(path)
+
+		if fc.RedisAddr != "redis.example.com:6379" {
+			t.Errorf("RedisAddr = %q, want %q", fc.RedisAddr, "redis.example.com:6379")
+		}
+		if fc.RedisChannel != "custom-channel" {
+			t.Errorf("RedisChannel = %q, want %q", fc.RedisChannel, "custom-channel")
+		}
+		if fc.LogLevel != "DEBUG" {
+			t.Errorf("LogLevel = %q, want %q", fc.LogLevel, "DEBUG")
+		}
+		if fc.ConfirmationSearchLimit != "50" {
+			t.Errorf("ConfirmationSearchLimit = %q, want %q", fc.ConfirmationSearchLimit, "50")
+		}
+	})
+
+	t.Run("returns empty config for invalid YAML", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "config.yaml")
+		if err := os.WriteFile(path, []byte("not: valid: yaml: ["), 0600); err != nil {
+			t.Fatalf("failed to write temp config: %v", err)
+		}
+		fc := loadFileConfig(path)
+		if fc.RedisAddr != "" || fc.LogLevel != "" {
+			t.Errorf("expected empty fileConfig for invalid YAML, got %+v", fc)
+		}
+	})
+}
+
+func TestGetEnvWithFile(t *testing.T) {
+	tests := []struct {
+		name      string
+		envVal    string
+		fileVal   string
+		defaultV  string
+		expected  string
+	}{
+		{name: "env var takes precedence over file and default", envVal: "from-env", fileVal: "from-file", defaultV: "default", expected: "from-env"},
+		{name: "file value used when env var unset", envVal: "", fileVal: "from-file", defaultV: "default", expected: "from-file"},
+		{name: "default used when both unset", envVal: "", fileVal: "", defaultV: "default", expected: "default"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TEST_ENVWITHFILE_VAR", tt.envVal)
+			result := getEnvWithFile("TEST_ENVWITHFILE_VAR", tt.fileVal, tt.defaultV)
+			if result != tt.expected {
+				t.Errorf("getEnvWithFile() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetEnvAsIntSecondsWithFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		envVal   string
+		fileVal  string
+		defaultV string
+		expected int
+	}{
+		{name: "env var int takes precedence", envVal: "3600", fileVal: "7200", defaultV: "48h", expected: 3600},
+		{name: "env var duration takes precedence", envVal: "1h", fileVal: "7200", defaultV: "48h", expected: 3600},
+		{name: "file value used when env unset", envVal: "", fileVal: "7200", defaultV: "48h", expected: 7200},
+		{name: "file duration used when env unset", envVal: "", fileVal: "24h", defaultV: "48h", expected: 86400},
+		{name: "default used when both unset", envVal: "", fileVal: "", defaultV: "48h", expected: 172800},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TEST_INTSECONDS_FILE_VAR", tt.envVal)
+			result := getEnvAsIntSecondsWithFile("TEST_INTSECONDS_FILE_VAR", tt.fileVal, tt.defaultV)
+			if result != tt.expected {
+				t.Errorf("getEnvAsIntSecondsWithFile() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetEnvAsIntWithFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		envVal   string
+		fileVal  string
+		defaultV string
+		expected int
+	}{
+		{name: "env var takes precedence", envVal: "42", fileVal: "99", defaultV: "10", expected: 42},
+		{name: "file value used when env unset", envVal: "", fileVal: "50", defaultV: "10", expected: 50},
+		{name: "default used when both unset", envVal: "", fileVal: "", defaultV: "10", expected: 10},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TEST_INTWITHFILE_VAR", tt.envVal)
+			result := getEnvAsIntWithFile("TEST_INTWITHFILE_VAR", tt.fileVal, tt.defaultV)
+			if result != tt.expected {
+				t.Errorf("getEnvAsIntWithFile() = %d, want %d", result, tt.expected)
+			}
+		})
 	}
 }
