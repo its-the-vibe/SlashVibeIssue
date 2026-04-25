@@ -1,0 +1,49 @@
+# SlashVibeIssue — sample configuration file
+#
+# Copy this file to config.yaml and adjust the values for your deployment.
+# config.yaml is git-ignored so it will not be committed accidentally.
+#
+# Secrets (REDIS_PASSWORD, SLACK_BOT_TOKEN) must still be supplied via
+# environment variables.  All values below can also be overridden at runtime
+# by setting the corresponding environment variable.
+
+# Redis connection
+redis_addr: "host.docker.internal:6379"
+
+# Redis pub/sub channels
+redis_channel: "slack-commands"
+redis_view_submission_channel: "slack-relay-view-submission"
+redis_reaction_channel: "slack-relay-reaction-added"
+redis_message_action_channel: "slack-relay-message-action"
+redis_poppit_output_channel: "poppit:command-output"
+redis_github_webhook_channel: "github-webhook-issues"
+redis_timebomb_channel: "timebomb-messages"
+
+# Redis lists
+redis_slackliner_list: "slack_messages"
+redis_poppit_list: "poppit:commands"
+redis_poppit_builder_list: "poppit:build-commands"
+redis_slack_reactions_list: "slack_reactions"
+
+# GitHub organisation — required, no default
+github_org: ""
+
+# Working directories
+working_dir: "/tmp"
+agent_working_dir: "/tmp/agent"
+
+# Slack confirmation channel — required, no default
+confirmation_channel_id: ""
+
+# Confirmation message TTL (accepts Go duration strings like "48h" or plain seconds)
+confirmation_ttl: "48h"
+
+# Maximum number of recent Slack messages to search for a matching issue URL
+confirmation_search_limit: 100
+
+# GitHub project settings for automatic issue assignment
+project_id: "1"
+project_org: "its-the-vibe"
+
+# Logging level: DEBUG, INFO, WARN, or ERROR
+log_level: "INFO"
