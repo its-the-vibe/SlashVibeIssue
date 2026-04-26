@@ -137,3 +137,8 @@ type TitleGenerationOutput struct {
 	Title   string `json:"title"`
 	Prompt  string `json:"prompt"`
 }
+
+type SlackLinerHTTPResponse struct {
+	Channel string `json:"channel"`
+	Ts      string `json:"ts"`
+}

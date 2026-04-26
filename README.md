@@ -88,6 +88,7 @@ cp config.sample.yaml config.yaml
 | `REDIS_GITHUB_WEBHOOK_CHANNEL` | `github-webhook-issues` | Redis channel for GitHub webhook events |
 | `REDIS_SLACK_REACTIONS_LIST` | `slack_reactions` | Redis list for SlackLiner reactions |
 | `REDIS_TIMEBOMB_CHANNEL` | `timebomb-messages` | Redis channel for TimeBomb TTL updates |
+| `SLACKLINER_URL` | _(empty)_ | Base URL of the SlackLiner HTTP API (e.g. `http://slackliner:8080`). Required for the :brain: reaction when both "Assign to Copilot" and "Sanitise issue on creation" are selected. |
 | `SLACK_BOT_TOKEN` | _(required, **secret**)_ | Slack bot token |
 | `GITHUB_ORG` | _(required)_ | GitHub organization name |
 | `WORKING_DIR` | `/tmp` | Working directory for gh commands |

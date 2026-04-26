@@ -24,6 +24,7 @@ type Config struct {
 	RedisSlackReactionsList    string
 	RedisTimeBombChannel       string
 	SlackBotToken              string
+	SlackLinerURL              string
 	GitHubOrg                  string
 	WorkingDir                 string
 	ConfirmationChannelID      string
@@ -50,6 +51,7 @@ type fileConfig struct {
 	RedisGitHubWebhookChannel  string `yaml:"redis_github_webhook_channel"`
 	RedisSlackReactionsList    string `yaml:"redis_slack_reactions_list"`
 	RedisTimeBombChannel       string `yaml:"redis_timebomb_channel"`
+	SlackLinerURL              string `yaml:"slackliner_url"`
 	GitHubOrg                  string `yaml:"github_org"`
 	WorkingDir                 string `yaml:"working_dir"`
 	ConfirmationChannelID      string `yaml:"confirmation_channel_id"`
@@ -97,6 +99,7 @@ func loadConfig() Config {
 		RedisGitHubWebhookChannel:  getEnvWithFile("REDIS_GITHUB_WEBHOOK_CHANNEL", fc.RedisGitHubWebhookChannel, "github-webhook-issues"),
 		RedisSlackReactionsList:    getEnvWithFile("REDIS_SLACK_REACTIONS_LIST", fc.RedisSlackReactionsList, "slack_reactions"),
 		RedisTimeBombChannel:       getEnvWithFile("REDIS_TIMEBOMB_CHANNEL", fc.RedisTimeBombChannel, "timebomb-messages"),
+		SlackLinerURL:              getEnvWithFile("SLACKLINER_URL", fc.SlackLinerURL, ""),
 		GitHubOrg:                  getEnvWithFile("GITHUB_ORG", fc.GitHubOrg, ""),
 		WorkingDir:                 getEnvWithFile("WORKING_DIR", fc.WorkingDir, "/tmp"),
 		ConfirmationChannelID:      getEnvWithFile("CONFIRMATION_CHANNEL_ID", fc.ConfirmationChannelID, ""),

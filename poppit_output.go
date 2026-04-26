@@ -104,7 +104,37 @@ func handlePoppitOutput(ctx context.Context, rdb *redis.Client, slackClient *sla
 	if shouldSanitiseIssue && !assignedToCopilot {
 		Debug("Triggering automatic issue sanitisation")
 
-		// Find the confirmation message to add brain reaction
+		// Send the confirmation message first via HTTP so we get the channel and ts
+		// back synchronously, then immediately add the :brain: reaction to it.
+		if config.SlackLinerURL != "" {
+			channelID, messageTs, httpErr := sendConfirmationHTTP(ctx, repo, title, username, issueURL, assignedToCopilot, config)
+			if httpErr != nil {
+				Error("Error sending confirmation via HTTP: %v", httpErr)
+			} else if channelID != "" && messageTs != "" {
+				// Add :brain: reaction to indicate sanitisation is starting
+				reactionErr := sendReactionToSlackLiner(ctx, rdb, issueSanitisingReactionEmoji, channelID, messageTs, config)
+				if reactionErr != nil {
+					Error("Error sending brain reaction: %v", reactionErr)
+				} else {
+					Debug("Sent %s reaction for sanitisation start", issueSanitisingReactionEmoji)
+				}
+			}
+
+			// Trigger issue sanitisation
+			err := sanitiseIssue(ctx, rdb, issueURL, repo, deferCopilotAssignment, config)
+			if err != nil {
+				Error("Error triggering issue sanitisation: %v", err)
+			} else {
+				Info("Automatic issue sanitisation triggered for: %s", issueURL)
+			}
+
+			// Confirmation already sent via HTTP; return early.
+			return
+		}
+
+		// SlackLiner URL not configured: fall back to searching for the message
+		// after the confirmation has been published via Redis.  This means the
+		// brain reaction may fail if the message has not yet been delivered.
 		channelID, messageTs, findErr := findMessageByIssueURL(ctx, slackClient, issueURL, config)
 		if findErr != nil {
 			Error("Error finding message for brain reaction: %v", findErr)

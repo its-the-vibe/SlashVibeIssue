@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -35,7 +37,7 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 
 	// Defer Copilot assignment if both sanitisation and copilot assignment are requested
 	deferCopilotAssignment := assignToCopilot && sanitiseIssue
-	
+
 	// Only assign Copilot immediately if not deferring
 	if assignToCopilot && !deferCopilotAssignment {
 		ghCmd = fmt.Sprintf("%s --assignee @copilot", ghCmd)
@@ -49,13 +51,13 @@ func createGitHubIssue(ctx context.Context, rdb *redis.Client, repo, title, desc
 		Dir:      config.WorkingDir,
 		Commands: []string{ghCmd},
 		Metadata: map[string]interface{}{
-			"repo":                    repoFullName,
-			"title":                   title,
-			"username":                username,
-			"addToProject":            addToProject,
-			"assignedToCopilot":       assignToCopilot && !deferCopilotAssignment,
-			"sanitiseIssue":           sanitiseIssue,
-			"deferCopilotAssignment":  deferCopilotAssignment,
+			"repo":                   repoFullName,
+			"title":                  title,
+			"username":               username,
+			"addToProject":           addToProject,
+			"assignedToCopilot":      assignToCopilot && !deferCopilotAssignment,
+			"sanitiseIssue":          sanitiseIssue,
+			"deferCopilotAssignment": deferCopilotAssignment,
 		},
 	}
 
@@ -189,6 +191,74 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 	}
 
 	Debug("Confirmation message sent to SlackLiner for issue: %s", issueURL)
+}
+
+// sendConfirmationHTTP sends the confirmation message via the SlackLiner HTTP API and returns
+// the channel ID and message timestamp from the response.  This allows the caller to
+// immediately react to the posted message without having to search for it later.
+func sendConfirmationHTTP(ctx context.Context, repo, title, username, issueURL string, assignedToCopilot bool, config Config) (channelID, ts string, err error) {
+	if config.SlackLinerURL == "" {
+		return "", "", fmt.Errorf("SlackLiner URL not configured")
+	}
+
+	// Parse the repository to get full org/repo format
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+
+	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s\n*Title:* %s\n*URL:* %s",
+		username, repoFullName, title, issueURL)
+
+	// Extract issue number from URL
+	issueNumber := extractIssueNumber(issueURL)
+
+	// Build metadata
+	metadata := map[string]interface{}{
+		"event_type": issueCreatedEventType,
+		"event_payload": map[string]interface{}{
+			"username":          username,
+			"title":             title,
+			"issue_number":      issueNumber,
+			"issue_url":         issueURL,
+			"repository":        repoFullName,
+			"assignedToCopilot": assignedToCopilot,
+		},
+	}
+
+	slackLinerMsg := SlackLinerMessage{
+		Channel:  config.ConfirmationChannelID,
+		Text:     message,
+		TTL:      config.ConfirmationTTL,
+		Metadata: metadata,
+	}
+
+	payload, err := json.Marshal(slackLinerMsg)
+	if err != nil {
+		return "", "", fmt.Errorf("error marshaling SlackLiner message: %v", err)
+	}
+
+	url := strings.TrimRight(config.SlackLinerURL, "/") + "/message"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return "", "", fmt.Errorf("error creating HTTP request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("error sending HTTP request to SlackLiner: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("SlackLiner HTTP request failed with status %d", resp.StatusCode)
+	}
+
+	var slResp SlackLinerHTTPResponse
+	if err := json.NewDecoder(resp.Body).Decode(&slResp); err != nil {
+		return "", "", fmt.Errorf("error decoding SlackLiner response: %v", err)
+	}
+
+	Debug("Confirmation message sent via SlackLiner HTTP for issue: %s (channel=%s, ts=%s)", issueURL, slResp.Channel, slResp.Ts)
+	return slResp.Channel, slResp.Ts, nil
 }
 
 func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
