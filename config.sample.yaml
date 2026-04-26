@@ -25,6 +25,11 @@ redis_poppit_list: "poppit:commands"
 redis_poppit_builder_list: "poppit:build-commands"
 redis_slack_reactions_list: "slack_reactions"
 
+# SlackLiner HTTP API URL — required for the :brain: reaction to work when
+# "Assign to Copilot" and "Sanitise issue on creation" are both selected.
+# Set this to the base URL of your SlackLiner service (e.g. http://slackliner:8080).
+slackliner_url: ""
+
 # GitHub organisation — required, no default
 github_org: ""
 

@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -434,36 +436,36 @@ func TestGitHubWebhookEventUnmarshal(t *testing.T) {
 func TestSanitiseIssueRepoWorkingDir(t *testing.T) {
 	// Test that repoWorkingDir is constructed correctly, handling org name duplication
 	tests := []struct {
-		name               string
-		repository         string
-		configOrg          string
-		configWorkingDir   string
-		expectedRepoInCmd  string
-		expectedDirInCmd   string
+		name              string
+		repository        string
+		configOrg         string
+		configWorkingDir  string
+		expectedRepoInCmd string
+		expectedDirInCmd  string
 	}{
 		{
-			name:               "Simple org/repo format",
-			repository:         "its-the-vibe/SlashVibeIssue",
-			configOrg:          "its-the-vibe",
-			configWorkingDir:   "/tmp",
-			expectedRepoInCmd:  "its-the-vibe/SlashVibeIssue",
-			expectedDirInCmd:   "/tmp/SlashVibeIssue",
+			name:              "Simple org/repo format",
+			repository:        "its-the-vibe/SlashVibeIssue",
+			configOrg:         "its-the-vibe",
+			configWorkingDir:  "/tmp",
+			expectedRepoInCmd: "its-the-vibe/SlashVibeIssue",
+			expectedDirInCmd:  "/tmp/SlashVibeIssue",
 		},
 		{
-			name:               "Different org",
-			repository:         "other-org/my-repo",
-			configOrg:          "its-the-vibe",
-			configWorkingDir:   "/tmp",
-			expectedRepoInCmd:  "other-org/my-repo",
-			expectedDirInCmd:   "/tmp/my-repo",
+			name:              "Different org",
+			repository:        "other-org/my-repo",
+			configOrg:         "its-the-vibe",
+			configWorkingDir:  "/tmp",
+			expectedRepoInCmd: "other-org/my-repo",
+			expectedDirInCmd:  "/tmp/my-repo",
 		},
 		{
-			name:               "Repo without org (backward compatibility)",
-			repository:         "SlashVibeIssue",
-			configOrg:          "its-the-vibe",
-			configWorkingDir:   "/tmp",
-			expectedRepoInCmd:  "its-the-vibe/SlashVibeIssue",
-			expectedDirInCmd:   "/tmp/SlashVibeIssue",
+			name:              "Repo without org (backward compatibility)",
+			repository:        "SlashVibeIssue",
+			configOrg:         "its-the-vibe",
+			configWorkingDir:  "/tmp",
+			expectedRepoInCmd: "its-the-vibe/SlashVibeIssue",
+			expectedDirInCmd:  "/tmp/SlashVibeIssue",
 		},
 	}
 
@@ -580,38 +582,38 @@ func TestDeferredCopilotAssignmentMetadata(t *testing.T) {
 	// Test that when both assignToCopilot and sanitiseIssue are true,
 	// the deferCopilotAssignment flag is set correctly
 	tests := []struct {
-		name                   string
-		assignToCopilot        bool
-		sanitiseIssue          bool
-		expectedDeferred       bool
+		name                      string
+		assignToCopilot           bool
+		sanitiseIssue             bool
+		expectedDeferred          bool
 		expectedAssignedToCopilot bool
 	}{
 		{
-			name:                   "Both options selected - should defer",
-			assignToCopilot:        true,
-			sanitiseIssue:          true,
-			expectedDeferred:       true,
+			name:                      "Both options selected - should defer",
+			assignToCopilot:           true,
+			sanitiseIssue:             true,
+			expectedDeferred:          true,
 			expectedAssignedToCopilot: false,
 		},
 		{
-			name:                   "Only assignToCopilot - should not defer",
-			assignToCopilot:        true,
-			sanitiseIssue:          false,
-			expectedDeferred:       false,
+			name:                      "Only assignToCopilot - should not defer",
+			assignToCopilot:           true,
+			sanitiseIssue:             false,
+			expectedDeferred:          false,
 			expectedAssignedToCopilot: true,
 		},
 		{
-			name:                   "Only sanitiseIssue - should not defer",
-			assignToCopilot:        false,
-			sanitiseIssue:          true,
-			expectedDeferred:       false,
+			name:                      "Only sanitiseIssue - should not defer",
+			assignToCopilot:           false,
+			sanitiseIssue:             true,
+			expectedDeferred:          false,
 			expectedAssignedToCopilot: false,
 		},
 		{
-			name:                   "Neither option - should not defer",
-			assignToCopilot:        false,
-			sanitiseIssue:          false,
-			expectedDeferred:       false,
+			name:                      "Neither option - should not defer",
+			assignToCopilot:           false,
+			sanitiseIssue:             false,
+			expectedDeferred:          false,
 			expectedAssignedToCopilot: false,
 		},
 	}
@@ -760,8 +762,8 @@ func TestViewSubmissionTitleFallbackToInitialValue(t *testing.T) {
 
 func TestSanitisationOutputWithDeferredAssignment(t *testing.T) {
 	tests := []struct {
-		name                   string
-		metadata               map[string]interface{}
+		name                    string
+		metadata                map[string]interface{}
 		expectCopilotAssignment bool
 	}{
 		{
@@ -803,9 +805,9 @@ func TestSanitisationOutputWithDeferredAssignment(t *testing.T) {
 			// Check if deferred assignment should happen
 			deferCopilotAssignment, _ := tt.metadata["deferCopilotAssignment"].(bool)
 			repository, _ := tt.metadata["repository"].(string)
-			
+
 			shouldAssign := deferCopilotAssignment && repository != ""
-			
+
 			if shouldAssign != tt.expectCopilotAssignment {
 				t.Errorf("shouldAssign = %v, want %v", shouldAssign, tt.expectCopilotAssignment)
 			}
@@ -833,10 +835,10 @@ func TestGetEnv(t *testing.T) {
 
 func TestGetEnvAsInt(t *testing.T) {
 	tests := []struct {
-		name         string
-		envVal       string
-		defaultVal   string
-		expected     int
+		name       string
+		envVal     string
+		defaultVal string
+		expected   int
 	}{
 		{name: "valid integer from env", envVal: "42", defaultVal: "0", expected: 42},
 		{name: "empty env uses default", envVal: "", defaultVal: "10", expected: 10},
@@ -965,11 +967,11 @@ confirmation_search_limit: "50"
 
 func TestGetEnvWithFile(t *testing.T) {
 	tests := []struct {
-		name      string
-		envVal    string
-		fileVal   string
-		defaultV  string
-		expected  string
+		name     string
+		envVal   string
+		fileVal  string
+		defaultV string
+		expected string
 	}{
 		{name: "env var takes precedence over file and default", envVal: "from-env", fileVal: "from-file", defaultV: "default", expected: "from-env"},
 		{name: "file value used when env var unset", envVal: "", fileVal: "from-file", defaultV: "default", expected: "from-file"},
@@ -1035,4 +1037,127 @@ func TestGetEnvAsIntWithFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSlackLinerHTTPResponseUnmarshal(t *testing.T) {
+	tests := []struct {
+		name            string
+		jsonPayload     string
+		expectedChannel string
+		expectedTs      string
+		expectError     bool
+	}{
+		{
+			name:            "valid response",
+			jsonPayload:     `{"channel":"C1234567890","ts":"1766282873.772199"}`,
+			expectedChannel: "C1234567890",
+			expectedTs:      "1766282873.772199",
+		},
+		{
+			name:            "response with extra fields",
+			jsonPayload:     `{"channel":"C9999","ts":"123.456","extra":"ignored"}`,
+			expectedChannel: "C9999",
+			expectedTs:      "123.456",
+		},
+		{
+			name:        "invalid JSON",
+			jsonPayload: `{"invalid json"`,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var resp SlackLinerHTTPResponse
+			err := json.Unmarshal([]byte(tt.jsonPayload), &resp)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if resp.Channel != tt.expectedChannel {
+				t.Errorf("Channel = %q, want %q", resp.Channel, tt.expectedChannel)
+			}
+			if resp.Ts != tt.expectedTs {
+				t.Errorf("Ts = %q, want %q", resp.Ts, tt.expectedTs)
+			}
+		})
+	}
+}
+
+func TestSendConfirmationHTTP(t *testing.T) {
+	t.Run("returns channel and ts on success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Expected POST, got %s", r.Method)
+			}
+			if r.URL.Path != "/message" {
+				t.Errorf("Expected /message, got %s", r.URL.Path)
+			}
+			// Verify the request body can be decoded as a SlackLinerMessage
+			var msg SlackLinerMessage
+			if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+				t.Errorf("Failed to decode request body: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(SlackLinerHTTPResponse{Channel: "CTEST", Ts: "1234.5678"})
+		}))
+		defer server.Close()
+
+		cfg := Config{
+			SlackLinerURL:         server.URL,
+			GitHubOrg:             "test-org",
+			ConfirmationChannelID: "CTEST",
+			ConfirmationTTL:       172800,
+		}
+
+		channelID, ts, err := sendConfirmationHTTP(t.Context(), "test-repo", "Test Issue", "testuser",
+			"https://github.com/test-org/test-repo/issues/1", false, cfg)
+
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if channelID != "CTEST" {
+			t.Errorf("channelID = %q, want %q", channelID, "CTEST")
+		}
+		if ts != "1234.5678" {
+			t.Errorf("ts = %q, want %q", ts, "1234.5678")
+		}
+	})
+
+	t.Run("returns error when SlackLinerURL not configured", func(t *testing.T) {
+		cfg := Config{SlackLinerURL: ""}
+		_, _, err := sendConfirmationHTTP(t.Context(), "repo", "title", "user",
+			"https://github.com/org/repo/issues/1", false, cfg)
+		if err == nil {
+			t.Error("Expected error when SlackLinerURL is empty")
+		}
+	})
+
+	t.Run("returns error on non-2xx response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+
+		cfg := Config{
+			SlackLinerURL:         server.URL,
+			GitHubOrg:             "test-org",
+			ConfirmationChannelID: "CTEST",
+		}
+		_, _, err := sendConfirmationHTTP(t.Context(), "repo", "title", "user",
+			"https://github.com/test-org/repo/issues/1", false, cfg)
+		if err == nil {
+			t.Error("Expected error on 500 response")
+		}
+	})
 }
