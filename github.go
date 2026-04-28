@@ -148,17 +148,16 @@ func extractIssueNumber(issueURL string) int {
 	return issueNumber
 }
 
-func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, assignedToCopilot bool, config Config) {
-	// Parse the repository to get full org/repo format
+// buildConfirmationMessage constructs the SlackLinerMessage for a GitHub issue creation event.
+// It is shared by sendConfirmation (Redis) and sendConfirmationHTTP (HTTP) to avoid duplication.
+func buildConfirmationMessage(repo, title, username, issueURL string, assignedToCopilot bool, config Config) SlackLinerMessage {
 	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 
 	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s\n*Title:* %s\n*URL:* %s",
 		username, repoFullName, title, issueURL)
 
-	// Extract issue number from URL
 	issueNumber := extractIssueNumber(issueURL)
 
-	// Build metadata
 	metadata := map[string]interface{}{
 		"event_type": issueCreatedEventType,
 		"event_payload": map[string]interface{}{
@@ -171,12 +170,16 @@ func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, usern
 		},
 	}
 
-	slackLinerMsg := SlackLinerMessage{
+	return SlackLinerMessage{
 		Channel:  config.ConfirmationChannelID,
 		Text:     message,
 		TTL:      config.ConfirmationTTL,
 		Metadata: metadata,
 	}
+}
+
+func sendConfirmation(ctx context.Context, rdb *redis.Client, repo, title, username, issueURL string, assignedToCopilot bool, config Config) {
+	slackLinerMsg := buildConfirmationMessage(repo, title, username, issueURL, assignedToCopilot, config)
 
 	payload, err := json.Marshal(slackLinerMsg)
 	if err != nil {
@@ -201,34 +204,7 @@ func sendConfirmationHTTP(ctx context.Context, repo, title, username, issueURL s
 		return "", "", fmt.Errorf("SlackLiner URL not configured")
 	}
 
-	// Parse the repository to get full org/repo format
-	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
-
-	message := fmt.Sprintf("✅ *GitHub Issue Created by @%s*\n\n*Repository:* %s\n*Title:* %s\n*URL:* %s",
-		username, repoFullName, title, issueURL)
-
-	// Extract issue number from URL
-	issueNumber := extractIssueNumber(issueURL)
-
-	// Build metadata
-	metadata := map[string]interface{}{
-		"event_type": issueCreatedEventType,
-		"event_payload": map[string]interface{}{
-			"username":          username,
-			"title":             title,
-			"issue_number":      issueNumber,
-			"issue_url":         issueURL,
-			"repository":        repoFullName,
-			"assignedToCopilot": assignedToCopilot,
-		},
-	}
-
-	slackLinerMsg := SlackLinerMessage{
-		Channel:  config.ConfirmationChannelID,
-		Text:     message,
-		TTL:      config.ConfirmationTTL,
-		Metadata: metadata,
-	}
+	slackLinerMsg := buildConfirmationMessage(repo, title, username, issueURL, assignedToCopilot, config)
 
 	payload, err := json.Marshal(slackLinerMsg)
 	if err != nil {

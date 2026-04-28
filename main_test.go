@@ -1161,3 +1161,47 @@ func TestSendConfirmationHTTP(t *testing.T) {
 		}
 	})
 }
+
+func TestBuildConfirmationMessage(t *testing.T) {
+	cfg := Config{
+		GitHubOrg:             "my-org",
+		ConfirmationChannelID: "CCHAN",
+		ConfirmationTTL:       86400,
+	}
+
+	msg := buildConfirmationMessage("my-repo", "Fix the bug", "alice",
+		"https://github.com/my-org/my-repo/issues/42", true, cfg)
+
+	if msg.Channel != "CCHAN" {
+		t.Errorf("Channel = %q, want %q", msg.Channel, "CCHAN")
+	}
+	if msg.TTL != 86400 {
+		t.Errorf("TTL = %d, want 86400", msg.TTL)
+	}
+	expectedText := "✅ *GitHub Issue Created by @alice*\n\n*Repository:* my-org/my-repo\n*Title:* Fix the bug\n*URL:* https://github.com/my-org/my-repo/issues/42"
+	if msg.Text != expectedText {
+		t.Errorf("Text = %q, want %q", msg.Text, expectedText)
+	}
+	if msg.Metadata == nil {
+		t.Fatal("Metadata is nil")
+	}
+	if et, ok := msg.Metadata["event_type"].(string); !ok || et != issueCreatedEventType {
+		t.Errorf("event_type = %v, want %q", msg.Metadata["event_type"], issueCreatedEventType)
+	}
+	payload, ok := msg.Metadata["event_payload"].(map[string]interface{})
+	if !ok {
+		t.Fatal("event_payload missing or wrong type")
+	}
+	if payload["username"] != "alice" {
+		t.Errorf("username = %v, want %q", payload["username"], "alice")
+	}
+	if payload["repository"] != "my-org/my-repo" {
+		t.Errorf("repository = %v, want %q", payload["repository"], "my-org/my-repo")
+	}
+	if payload["issue_number"] != 42 {
+		t.Errorf("issue_number = %v, want 42", payload["issue_number"])
+	}
+	if payload["assignedToCopilot"] != true {
+		t.Errorf("assignedToCopilot = %v, want true", payload["assignedToCopilot"])
+	}
+}
