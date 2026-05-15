@@ -48,8 +48,8 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 	}
 
-	// Only handle sparkles or ticket emoji
-	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" {
+	// Only handle sparkles, ticket or octopus emoji
+	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" && reaction.Event.Reaction != julesReactionEmoji {
 		return
 	}
 
@@ -121,6 +121,17 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 
 	// Handle different reactions
 	switch reaction.Event.Reaction {
+	case julesReactionEmoji:
+		Info("Assigning issue to Jules: %s", issueURL)
+
+		// Add jules label to issue
+		err = assignIssueToJules(ctx, rdb, issueURL, repository, config)
+		if err != nil {
+			Error("Error assigning issue to Jules: %v", err)
+			return
+		}
+
+		Info("Successfully sent Jules assignment command for: %s", issueURL)
 	case "sparkles":
 		if assignedToCopilot {
 			Debug("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)

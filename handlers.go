@@ -14,6 +14,8 @@ const (
 	issueAssignedReactionEmoji   = "sparkles"
 	issueSanitisedReactionEmoji  = "ticket"
 	issueSanitisingReactionEmoji = "brain"
+	issueJulesLabel              = "jules"
+	julesReactionEmoji           = "octopus"
 	issueClosedTTLSeconds        = 86400 // 24 hours
 	issueCreatedEventType        = "issue_created"
 	copilotAssigneeName          = "Copilot"
