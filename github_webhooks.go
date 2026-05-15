@@ -46,6 +46,12 @@ func handleGitHubIssueEvent(ctx context.Context, rdb *redis.Client, slackClient 
 		handleIssueAssigned(ctx, rdb, slackClient, event, config)
 		return
 	}
+
+	// Handle issue labeled events
+	if event.Action == "labeled" {
+		handleIssueLabeled(ctx, rdb, slackClient, event, config)
+		return
+	}
 }
 
 func handleIssueClosed(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, event GitHubWebhookEvent, config Config) {
@@ -141,4 +147,54 @@ func handleIssueAssigned(ctx context.Context, rdb *redis.Client, slackClient *sl
 	}
 
 	Debug("Sent sparkles reaction for message ts=%s", messageTs)
+}
+
+func handleIssueLabeled(ctx context.Context, rdb *redis.Client, slackClient *slack.Client, event GitHubWebhookEvent, config Config) {
+	Info("Received issue labeled event for issue #%d: %s", event.Issue.Number, event.Issue.Title)
+
+	// Check if label data is present
+	if event.Label == nil {
+		Warn("No label data in event")
+		return
+	}
+
+	// Check if label is "jules"
+	if event.Label.Name != issueJulesLabel {
+		Debug("Label is not jules: %s", event.Label.Name)
+		return
+	}
+
+	Debug("Issue labeled with jules")
+
+	// Use the html_url from the event payload
+	issueURL := event.Issue.HTMLURL
+	if issueURL == "" {
+		Warn("Missing html_url in issue event")
+		return
+	}
+
+	Debug("Issue URL: %s", issueURL)
+
+	// Search for the message with matching metadata
+	channelID, messageTs, err := findMessageByIssueURL(ctx, slackClient, issueURL, config)
+	if err != nil {
+		Error("Error finding message by issue URL: %v", err)
+		return
+	}
+
+	if channelID == "" || messageTs == "" {
+		Debug("No message found for issue URL: %s", issueURL)
+		return
+	}
+
+	Debug("Found message for issue %s at channel=%s, ts=%s", issueURL, channelID, messageTs)
+
+	// Send octopus reaction to SlackLiner
+	err = sendReactionToSlackLiner(ctx, rdb, julesReactionEmoji, channelID, messageTs, config)
+	if err != nil {
+		Error("Error sending reaction: %v", err)
+		return
+	}
+
+	Debug("Sent octopus reaction for message ts=%s", messageTs)
 }

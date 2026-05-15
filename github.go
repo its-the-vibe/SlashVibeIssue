@@ -271,6 +271,40 @@ func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo
 	return nil
 }
 
+func assignIssueToJules(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+	// Parse the repository to get full org/repo format
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+
+	// Build the gh command to add jules label to issue
+	ghCmd := fmt.Sprintf("gh issue edit --add-label %q %s", issueJulesLabel, issueURL)
+
+	// Create Poppit command message
+	poppitCmd := PoppitCommand{
+		Repo:     repoFullName,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-assign-jules",
+		Dir:      config.WorkingDir,
+		Commands: []string{ghCmd},
+		Metadata: map[string]interface{}{
+			"issueURL": issueURL,
+		},
+	}
+
+	payload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
+	}
+
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	Debug("Jules assignment command sent to Poppit for issue: %s", issueURL)
+	return nil
+}
+
 func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string, deferCopilotAssignment bool, config Config) error {
 	// Parse the repository to get full org/repo format
 	repoFullName := parseRepoFullName(repo, config.GitHubOrg)

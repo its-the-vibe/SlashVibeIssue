@@ -86,6 +86,9 @@ type GitHubWebhookEvent struct {
 		Login string `json:"login"`
 		Type  string `json:"type"`
 	} `json:"assignee"`
+	Label *struct {
+		Name string `json:"name"`
+	} `json:"label"`
 	Issue struct {
 		URL           string `json:"url"`
 		HTMLURL       string `json:"html_url"`
