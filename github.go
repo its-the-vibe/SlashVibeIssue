@@ -275,6 +275,8 @@ func assignIssueToJules(ctx context.Context, rdb *redis.Client, issueURL, repo s
 	// Parse the repository to get full org/repo format
 	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 
+	labelCmd := fmt.Sprintf("gh label create \"%s\" --color \"EA4335\" --force --repo %s", issueJulesLabel, repoFullName)
+
 	// Build the gh command to add jules label to issue
 	ghCmd := fmt.Sprintf("gh issue edit --add-label %q %s", issueJulesLabel, issueURL)
 
@@ -284,7 +286,7 @@ func assignIssueToJules(ctx context.Context, rdb *redis.Client, issueURL, repo s
 		Branch:   "refs/heads/main",
 		Type:     "slash-vibe-issue-assign-jules",
 		Dir:      config.WorkingDir,
-		Commands: []string{ghCmd},
+		Commands: []string{labelCmd, ghCmd},
 		Metadata: map[string]interface{}{
 			"issueURL": issueURL,
 		},
