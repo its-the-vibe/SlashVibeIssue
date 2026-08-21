@@ -19,9 +19,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldfl
 # Final stage (distroless)
 FROM gcr.io/distroless/static-debian13:nonroot
 
+WORKDIR /app
+
 # Copy the binary from builder
-COPY --from=builder /build/slashvibeissue /slashvibeissue
+COPY --from=builder /build/slashvibeissue /app/slashvibeissue
 
 USER nonroot:nonroot
 
-ENTRYPOINT ["/slashvibeissue"]
+ENTRYPOINT ["/app/slashvibeissue"]
