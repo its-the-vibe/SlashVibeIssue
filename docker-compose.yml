@@ -4,7 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     read_only: true
-    image: slashvibeissue:latest
+    image: ghcr.io/its-the-vibe/slashvibeissue:latest
+    pull_policy: always
     container_name: slashvibeissue
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}

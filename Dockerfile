@@ -1,8 +1,8 @@
 # Build stage
-FROM golang:1.26.6-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine AS builder
 
-# Install ca-certificates for HTTPS
-RUN apk add --no-cache ca-certificates && update-ca-certificates
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /build
 
@@ -14,15 +14,14 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o slashvibeissue .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o slashvibeissue .
 
-# Final stage - using scratch
-FROM scratch
+# Final stage (distroless)
+FROM gcr.io/distroless/static-debian13:nonroot
 
 # Copy the binary from builder
 COPY --from=builder /build/slashvibeissue /slashvibeissue
 
-# Copy CA certificates for HTTPS requests
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+USER nonroot:nonroot
 
 ENTRYPOINT ["/slashvibeissue"]
