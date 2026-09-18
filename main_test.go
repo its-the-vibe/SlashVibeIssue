@@ -1162,6 +1162,46 @@ func TestSendConfirmationHTTP(t *testing.T) {
 	})
 }
 
+func TestCloseIssuePayload(t *testing.T) {
+	config := Config{
+		GitHubOrg:  "its-the-vibe",
+		WorkingDir: "/tmp",
+	}
+
+	issueURL := "https://github.com/its-the-vibe/SlashVibeIssue/issues/42"
+	repo := "SlashVibeIssue"
+
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+	expectedCmd := fmt.Sprintf("gh issue close %s", issueURL)
+
+	poppitCmd := PoppitCommand{
+		Repo:     repoFullName,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-close",
+		Dir:      config.WorkingDir,
+		Commands: []string{expectedCmd},
+		Metadata: map[string]interface{}{
+			"issueURL": issueURL,
+		},
+	}
+
+	if poppitCmd.Type != "slash-vibe-issue-close" {
+		t.Errorf("PoppitCommand.Type = %q, want %q", poppitCmd.Type, "slash-vibe-issue-close")
+	}
+
+	if poppitCmd.Repo != "its-the-vibe/SlashVibeIssue" {
+		t.Errorf("PoppitCommand.Repo = %q, want %q", poppitCmd.Repo, "its-the-vibe/SlashVibeIssue")
+	}
+
+	if len(poppitCmd.Commands) != 1 || poppitCmd.Commands[0] != expectedCmd {
+		t.Errorf("PoppitCommand.Commands = %v, want [%q]", poppitCmd.Commands, expectedCmd)
+	}
+
+	if url, ok := poppitCmd.Metadata["issueURL"].(string); !ok || url != issueURL {
+		t.Errorf("PoppitCommand.Metadata[issueURL] = %v, want %q", poppitCmd.Metadata["issueURL"], issueURL)
+	}
+}
+
 func TestBuildConfirmationMessage(t *testing.T) {
 	cfg := Config{
 		GitHubOrg:             "my-org",
