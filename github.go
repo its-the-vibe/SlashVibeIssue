@@ -355,3 +355,37 @@ func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string
 	Debug("Issue sanitisation command sent to Poppit builder queue for issue: %s", issueURL)
 	return nil
 }
+
+func closeIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+	// Parse the repository to get full org/repo format
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+
+	// Build the gh command to close the issue
+	ghCmd := fmt.Sprintf("gh issue close %s", issueURL)
+
+	// Create Poppit command message
+	poppitCmd := PoppitCommand{
+		Repo:     repoFullName,
+		Branch:   "refs/heads/main",
+		Type:     "slash-vibe-issue-close",
+		Dir:      config.WorkingDir,
+		Commands: []string{ghCmd},
+		Metadata: map[string]interface{}{
+			"issueURL": issueURL,
+		},
+	}
+
+	payload, err := json.Marshal(poppitCmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Poppit command: %v", err)
+	}
+
+	// Push command to Poppit list
+	err = rdb.RPush(ctx, config.RedisPoppitList, payload).Err()
+	if err != nil {
+		return fmt.Errorf("failed to push command to Poppit: %v", err)
+	}
+
+	Debug("Close issue command sent to Poppit for issue: %s", issueURL)
+	return nil
+}

@@ -14,6 +14,7 @@ const (
 	issueAssignedReactionEmoji   = "sparkles"
 	issueSanitisedReactionEmoji  = "ticket"
 	issueSanitisingReactionEmoji = "brain"
+	issueCloseReactionEmoji      = "x"
 	issueJulesLabel              = "jules"
 	julesReactionEmoji           = "octopus"
 	issueClosedTTLSeconds        = 86400 // 24 hours

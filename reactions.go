@@ -48,8 +48,8 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 	}
 
-	// Only handle sparkles, ticket or octopus emoji
-	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" && reaction.Event.Reaction != julesReactionEmoji {
+	// Only handle sparkles, ticket, octopus, or x emoji
+	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" && reaction.Event.Reaction != julesReactionEmoji && reaction.Event.Reaction != issueCloseReactionEmoji {
 		return
 	}
 
@@ -175,5 +175,16 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 
 		Info("Successfully triggered issue sanitisation: %s", issueURL)
+	case issueCloseReactionEmoji:
+		Info("Closing issue: %s", issueURL)
+
+		// Close issue via GitHub CLI using Poppit
+		err = closeIssue(ctx, rdb, issueURL, repository, config)
+		if err != nil {
+			Error("Error closing issue: %v", err)
+			return
+		}
+
+		Info("Successfully sent close issue command for: %s", issueURL)
 	}
 }
