@@ -17,6 +17,9 @@ const (
 	issueCloseReactionEmoji      = "x"
 	issueJulesLabel              = "jules"
 	julesReactionEmoji           = "octopus"
+	issueMiniSweAgentLabel       = "mini-swe-agent"
+	miniSweAgentReactionEmoji    = "gemini"
+	miniSweAgentLabelColor       = "00b4d8"
 	issueClosedTTLSeconds        = 86400 // 24 hours
 	issueCreatedEventType        = "issue_created"
 	copilotAssigneeName          = "Copilot"

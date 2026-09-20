@@ -1162,6 +1162,63 @@ func TestSendConfirmationHTTP(t *testing.T) {
 	})
 }
 
+func TestAssignIssueToLabelPayload(t *testing.T) {
+	config := Config{
+		GitHubOrg:  "its-the-vibe",
+		WorkingDir: "/tmp",
+	}
+
+	issueURL := "https://github.com/its-the-vibe/SlashVibeIssue/issues/42"
+	repo := "SlashVibeIssue"
+	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
+
+	t.Run("Jules label payload", func(t *testing.T) {
+		expectedLabelCmd := fmt.Sprintf("gh label create %q --color \"6E5DD0\" --force --repo %s", issueJulesLabel, repoFullName)
+		expectedEditCmd := fmt.Sprintf("gh issue edit --add-label %q %s", issueJulesLabel, issueURL)
+
+		poppitCmd := PoppitCommand{
+			Repo:     repoFullName,
+			Branch:   "refs/heads/main",
+			Type:     "slash-vibe-issue-assign-jules",
+			Dir:      config.WorkingDir,
+			Commands: []string{expectedLabelCmd, expectedEditCmd},
+			Metadata: map[string]interface{}{
+				"issueURL": issueURL,
+			},
+		}
+
+		if poppitCmd.Type != "slash-vibe-issue-assign-jules" {
+			t.Errorf("PoppitCommand.Type = %q, want %q", poppitCmd.Type, "slash-vibe-issue-assign-jules")
+		}
+		if len(poppitCmd.Commands) != 2 || poppitCmd.Commands[0] != expectedLabelCmd || poppitCmd.Commands[1] != expectedEditCmd {
+			t.Errorf("PoppitCommand.Commands = %v, want [%q, %q]", poppitCmd.Commands, expectedLabelCmd, expectedEditCmd)
+		}
+	})
+
+	t.Run("mini-swe-agent label payload", func(t *testing.T) {
+		expectedLabelCmd := fmt.Sprintf("gh label create %q --color %q --force --repo %s", issueMiniSweAgentLabel, miniSweAgentLabelColor, repoFullName)
+		expectedEditCmd := fmt.Sprintf("gh issue edit --add-label %q %s", issueMiniSweAgentLabel, issueURL)
+
+		poppitCmd := PoppitCommand{
+			Repo:     repoFullName,
+			Branch:   "refs/heads/main",
+			Type:     "slash-vibe-issue-assign-mini-swe-agent",
+			Dir:      config.WorkingDir,
+			Commands: []string{expectedLabelCmd, expectedEditCmd},
+			Metadata: map[string]interface{}{
+				"issueURL": issueURL,
+			},
+		}
+
+		if poppitCmd.Type != "slash-vibe-issue-assign-mini-swe-agent" {
+			t.Errorf("PoppitCommand.Type = %q, want %q", poppitCmd.Type, "slash-vibe-issue-assign-mini-swe-agent")
+		}
+		if len(poppitCmd.Commands) != 2 || poppitCmd.Commands[0] != expectedLabelCmd || poppitCmd.Commands[1] != expectedEditCmd {
+			t.Errorf("PoppitCommand.Commands = %v, want [%q, %q]", poppitCmd.Commands, expectedLabelCmd, expectedEditCmd)
+		}
+	})
+}
+
 func TestCloseIssuePayload(t *testing.T) {
 	config := Config{
 		GitHubOrg:  "its-the-vibe",

@@ -48,8 +48,8 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 	}
 
-	// Only handle sparkles, ticket, octopus, or x emoji
-	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" && reaction.Event.Reaction != julesReactionEmoji && reaction.Event.Reaction != issueCloseReactionEmoji {
+	// Only handle sparkles, ticket, octopus, gemini, or x emoji
+	if reaction.Event.Reaction != "sparkles" && reaction.Event.Reaction != "ticket" && reaction.Event.Reaction != julesReactionEmoji && reaction.Event.Reaction != miniSweAgentReactionEmoji && reaction.Event.Reaction != issueCloseReactionEmoji {
 		return
 	}
 
@@ -132,6 +132,17 @@ func handleReactionAdded(ctx context.Context, rdb *redis.Client, slackClient *sl
 		}
 
 		Info("Successfully sent Jules assignment command for: %s", issueURL)
+	case miniSweAgentReactionEmoji:
+		Info("Assigning issue to mini-swe-agent: %s", issueURL)
+
+		// Add mini-swe-agent label to issue
+		err = assignIssueToMiniSweAgent(ctx, rdb, issueURL, repository, config)
+		if err != nil {
+			Error("Error assigning issue to mini-swe-agent: %v", err)
+			return
+		}
+
+		Info("Successfully sent mini-swe-agent assignment command for: %s", issueURL)
 	case "sparkles":
 		if assignedToCopilot {
 			Debug("Issue already assigned to Copilot, ignoring reaction: %s", issueURL)
