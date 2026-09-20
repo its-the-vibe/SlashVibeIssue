@@ -213,6 +213,16 @@ After an issue is created, you can assign it to Copilot by reacting to the confi
 
 Note: The confirmation messages include metadata about the issue (URL, repository, assignment status) to support this feature.
 
+### Assigning Issue to mini-swe-agent via Emoji Reaction
+
+After an issue is created, you can assign it to mini-swe-agent by reacting to the confirmation message with the ♊️ (`:gemini:`) emoji:
+
+1. React with ♊️ (`:gemini:`) to any issue confirmation message
+2. The service will automatically add the `mini-swe-agent` label (with color `#00b4d8`) to the issue via GitHub CLI
+3. Only works if:
+   - The reaction is from a human user (not a bot)
+   - The confirmation message has valid metadata for an `issue_created` event
+
 ### Sanitising Issues via Emoji Reaction
 
 After an issue is created, you can manually trigger issue sanitization by reacting to the confirmation message with the 🎫 (`:ticket:`) emoji:

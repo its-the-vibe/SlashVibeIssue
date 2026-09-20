@@ -271,20 +271,20 @@ func assignIssueToCopilot(ctx context.Context, rdb *redis.Client, issueURL, repo
 	return nil
 }
 
-func assignIssueToJules(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+func assignIssueToLabel(ctx context.Context, rdb *redis.Client, issueURL, repo, label, color, commandType, agentName string, config Config) error {
 	// Parse the repository to get full org/repo format
 	repoFullName := parseRepoFullName(repo, config.GitHubOrg)
 
-	labelCmd := fmt.Sprintf("gh label create \"%s\" --color \"6E5DD0\" --force --repo %s", issueJulesLabel, repoFullName)
+	labelCmd := fmt.Sprintf("gh label create \"%s\" --color \"%s\" --force --repo %s", label, color, repoFullName)
 
-	// Build the gh command to add jules label to issue
-	ghCmd := fmt.Sprintf("gh issue edit --add-label %q %s", issueJulesLabel, issueURL)
+	// Build the gh command to add label to issue
+	ghCmd := fmt.Sprintf("gh issue edit --add-label %q %s", label, issueURL)
 
 	// Create Poppit command message
 	poppitCmd := PoppitCommand{
 		Repo:     repoFullName,
 		Branch:   "refs/heads/main",
-		Type:     "slash-vibe-issue-assign-jules",
+		Type:     commandType,
 		Dir:      config.WorkingDir,
 		Commands: []string{labelCmd, ghCmd},
 		Metadata: map[string]interface{}{
@@ -303,8 +303,16 @@ func assignIssueToJules(ctx context.Context, rdb *redis.Client, issueURL, repo s
 		return fmt.Errorf("failed to push command to Poppit: %v", err)
 	}
 
-	Debug("Jules assignment command sent to Poppit for issue: %s", issueURL)
+	Debug("%s assignment command sent to Poppit for issue: %s", agentName, issueURL)
 	return nil
+}
+
+func assignIssueToJules(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+	return assignIssueToLabel(ctx, rdb, issueURL, repo, issueJulesLabel, "6E5DD0", "slash-vibe-issue-assign-jules", "Jules", config)
+}
+
+func assignIssueToMiniSweAgent(ctx context.Context, rdb *redis.Client, issueURL, repo string, config Config) error {
+	return assignIssueToLabel(ctx, rdb, issueURL, repo, issueMiniSweAgentLabel, miniSweAgentLabelColor, "slash-vibe-issue-assign-mini-swe-agent", "mini-swe-agent", config)
 }
 
 func sanitiseIssue(ctx context.Context, rdb *redis.Client, issueURL, repo string, deferCopilotAssignment bool, config Config) error {
